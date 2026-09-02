@@ -86,9 +86,37 @@ h2:first-child{margin-top:2px}
 .setno{width:26px;color:var(--muted);font-size:13px}
 .setval{font-size:17px;font-weight:600}
 .del{color:var(--muted);font-size:20px;padding:0 6px;margin-left:auto}
-.gbtn{flex:0 0 auto;width:38px;height:38px;border-radius:11px;background:var(--surface2);
-  display:flex;align-items:center;justify-content:center;font-size:15px;color:var(--accent)}
+.gbtn{flex:0 0 auto;height:38px;padding:0 12px;border-radius:11px;background:var(--surface2);
+  display:flex;align-items:center;justify-content:center;font-size:13.5px;font-weight:700;
+  color:var(--accent);white-space:nowrap;gap:3px}
 .gbtn:active{opacity:.6}
+.ytwrap{position:relative;width:100%;padding-top:56.25%;border-radius:12px;overflow:hidden;
+  margin-bottom:12px;background:#000}
+.ytwrap iframe{position:absolute;inset:0;width:100%;height:100%;border:0}
+
+/* 휴식 타이머 막대 */
+#restBar{position:fixed;left:10px;right:10px;bottom:calc(80px + env(safe-area-inset-bottom));
+  z-index:45;background:var(--accent);color:var(--onAccent);border-radius:14px;
+  padding:9px 10px 9px 16px;display:flex;align-items:center;gap:6px;max-width:600px;
+  margin:0 auto;box-shadow:0 4px 18px rgba(10,14,20,.22)}
+#restBar .t{flex:1;font-size:19px;font-weight:800;letter-spacing:-.3px}
+#restBar button{color:var(--onAccent);background:rgba(255,255,255,.22);border-radius:9px;
+  padding:8px 10px;font-size:13px;font-weight:700}
+
+/* 전체화면 카운터 */
+.overlay{position:fixed;inset:0;z-index:80;background:var(--bg);display:flex;flex-direction:column;
+  padding:calc(10px + env(safe-area-inset-top)) 14px calc(14px + env(safe-area-inset-bottom))}
+.ovtop{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.ovtop .ttl{flex:1;font-size:16px;font-weight:700}
+.ovtop button{color:var(--muted);font-size:15px;padding:8px 10px}
+.ovtap{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
+  background:var(--surface);border-radius:18px;margin-bottom:12px;user-select:none;
+  box-shadow:var(--shadow)}
+.ovtap:active{background:var(--surface2)}
+.bignum{font-size:92px;font-weight:800;line-height:1;letter-spacing:-3px;color:var(--accent)}
+.ovhint{color:var(--muted);font-size:14px;margin-top:14px}
+.ovbtm{display:flex;gap:8px}
+.ovbtm .btn{padding:15px}
 .tip{font-size:14.5px;line-height:1.75;color:var(--text);background:var(--surface2);
   border-radius:12px;padding:13px 14px;margin-bottom:12px}
 .tip b{color:var(--accent);font-weight:700}
@@ -201,7 +229,8 @@ nav button.on{color:var(--accent);font-weight:700}
     </div>
     <h2>최근 기록</h2>
     <div id="logList"></div>
-    <button class="btn ghost" id="themeBtn" style="margin-top:16px"></button>
+    <button class="btn ghost" id="restBtn" style="margin-top:16px"></button>
+    <button class="btn ghost" id="themeBtn" style="margin-top:8px"></button>
     <div id="sync"></div>
   </section>
 </main>
@@ -214,6 +243,7 @@ nav button.on{color:var(--accent);font-weight:700}
   <button data-v="log"><span class="ic">📆</span>기록</button>
 </nav>
 
+<div id="restBar" class="hide"></div>
 <div id="toast"></div>
 
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -333,6 +363,101 @@ function renderHeader(){
   $('#dPick').value=cur;
 }
 
+/* ══ 소리 / 진동 ══ */
+var actx=null;
+function beep(times){
+  try{
+    if(!actx) actx=new (window.AudioContext||window.webkitAudioContext)();
+    if(actx.state==='suspended') actx.resume();
+    for(var i=0;i<(times||3);i++){
+      var o=actx.createOscillator(), g=actx.createGain();
+      o.connect(g); g.connect(actx.destination);
+      o.type='sine'; o.frequency.value=i===(times-1)?1100:850;
+      var t=actx.currentTime+i*0.3;
+      g.gain.setValueAtTime(0.0001,t);
+      g.gain.exponentialRampToValueAtTime(0.4,t+0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001,t+0.24);
+      o.start(t); o.stop(t+0.27);
+    }
+  }catch(e){}
+  try{ if(navigator.vibrate) navigator.vibrate([180,90,180]); }catch(e){}
+}
+
+/* ══ 휴식 타이머 ══ */
+var REST=90, restEnd=0, restTm=null;
+try{ var r=parseInt(localStorage.getItem('undong_rest'),10); if(!isNaN(r)) REST=r; }catch(e){}
+function startRest(sec){
+  if(!sec) return;
+  restEnd=Date.now()+sec*1000;
+  var b=$('#restBar');
+  b.innerHTML='<span class="t num"></span><button data-r="-30">−30</button>'+
+              '<button data-r="30">+30</button><button data-r="0">✕</button>';
+  b.querySelectorAll('[data-r]').forEach(function(x){
+    x.onclick=function(){
+      var v=+x.dataset.r;
+      if(!v){ stopRest(); return; }
+      restEnd+=v*1000;
+      if(restEnd<=Date.now()) stopRest(); else tickRest();
+    };
+  });
+  b.classList.remove('hide');
+  if(restTm) clearInterval(restTm);
+  restTm=setInterval(tickRest,250); tickRest();
+}
+function stopRest(){ if(restTm) clearInterval(restTm); restTm=null; restEnd=0; $('#restBar').classList.add('hide'); }
+function tickRest(){
+  var left=Math.ceil((restEnd-Date.now())/1000);
+  if(left<=0){ stopRest(); beep(3); toast('휴식 끝 — 다음 세트'); return; }
+  var t=$('#restBar').querySelector('.t');
+  if(t) t.textContent='휴식 '+Math.floor(left/60)+':'+pad(left%60);
+}
+
+/* ══ 전체화면 카운터 ══ */
+function counter(title, start, onDone){
+  var n=start||0;
+  var el=document.createElement('div'); el.className='overlay';
+  el.innerHTML='<div class="ovtop"><div class="ttl">'+esc(title)+'</div><button id="_x">닫기</button></div>'+
+    '<div class="ovtap" id="_tap"><div class="bignum num" id="_n">'+n+'</div>'+
+    '<div class="ovhint">화면을 누를 때마다 1회씩 올라갑니다</div></div>'+
+    '<div class="ovbtm"><button class="btn ghost" id="_m">−1</button>'+
+    '<button class="btn ghost" id="_z">0</button>'+
+    '<button class="btn" id="_ok">완료</button></div>';
+  document.body.appendChild(el);
+  function up(v){ n=Math.max(0,n+v); el.querySelector('#_n').textContent=n;
+    try{ if(navigator.vibrate) navigator.vibrate(18); }catch(e){} }
+  el.querySelector('#_tap').onclick=function(){ up(1); };
+  el.querySelector('#_m').onclick=function(){ up(-1); };
+  el.querySelector('#_z').onclick=function(){ n=0; el.querySelector('#_n').textContent=0; };
+  el.querySelector('#_x').onclick=function(){ el.remove(); };
+  el.querySelector('#_ok').onclick=function(){ el.remove(); if(onDone) onDone(n); };
+}
+
+/* ══ 전체화면 스톱워치 ══ */
+function stopwatch(title, onDone){
+  var t0=0, acc=0, run=false, iv=null;
+  var el=document.createElement('div'); el.className='overlay';
+  el.innerHTML='<div class="ovtop"><div class="ttl">'+esc(title)+'</div><button id="_x">닫기</button></div>'+
+    '<div class="ovtap"><div class="bignum num" id="_n">0:00</div>'+
+    '<div class="ovhint">시작을 누르면 시간이 올라갑니다</div></div>'+
+    '<div class="ovbtm"><button class="btn ghost" id="_z">초기화</button>'+
+    '<button class="btn" id="_s">시작</button>'+
+    '<button class="btn ghost" id="_ok">완료</button></div>';
+  document.body.appendChild(el);
+  function ms(){ return acc + (run? Date.now()-t0 : 0); }
+  function draw(){ var s=Math.floor(ms()/1000);
+    el.querySelector('#_n').textContent=Math.floor(s/60)+':'+pad(s%60); }
+  el.querySelector('#_s').onclick=function(){
+    if(run){ acc=ms(); run=false; clearInterval(iv); this.textContent='계속'; }
+    else{ t0=Date.now(); run=true; iv=setInterval(draw,200); this.textContent='정지'; }
+    draw();
+  };
+  el.querySelector('#_z').onclick=function(){ acc=0; t0=Date.now(); draw(); };
+  el.querySelector('#_x').onclick=function(){ clearInterval(iv); el.remove(); };
+  el.querySelector('#_ok').onclick=function(){
+    clearInterval(iv); var m=Math.round(ms()/60000); el.remove(); if(onDone) onDone(m, Math.round(ms()/1000));
+  };
+}
+
 /* ══ 자세 가이드 ══ */
 var TIPS = {
  '벤치프레스':['견갑골을 모아 벤치에 딱 붙이고 가슴을 편다','바는 명치 위로 내리고 팔꿈치는 몸통과 45도','발로 바닥을 밀어 몸을 고정, 허리는 과하게 젖히지 않는다'],
@@ -365,17 +490,29 @@ function guide(name){
   var html='';
   if(t) html += '<div class="tip">'+t.map(function(s,i){return '<b>'+(i+1)+'</b> '+esc(s);}).join('<br>')+'</div>';
   else html += '<div class="tip muted">저장된 요령이 없는 종목입니다. 아래에서 영상으로 확인하세요.</div>';
-  if(saved) html += '<a class="vlink main" href="'+esc(saved)+'" target="_blank" rel="noopener">▶ 저장해 둔 영상 보기</a>';
+  var yid = saved ? ytId(saved) : null;
+  if(yid) html += '<div class="ytwrap"><iframe src="https://www.youtube.com/embed/'+yid+
+    '" allow="accelerometer;autoplay;encrypted-media;gyroscope;picture-in-picture" allowfullscreen></iframe></div>';
+  else if(saved) html += '<a class="vlink main" href="'+esc(saved)+'" target="_blank" rel="noopener">▶ 저장해 둔 영상 보기</a>';
+  html += '<div class="row" style="margin-bottom:10px">'+
+    '<button class="btn ghost" id="gCnt">👆 횟수 세기</button>'+
+    '<button class="btn ghost" id="gSw">⏱ 시간 재기</button></div>';
   html += '<a class="vlink'+(saved?'':' main')+'" href="https://www.youtube.com/results?search_query='+q+
           '" target="_blank" rel="noopener">▶ 유튜브에서 자세 영상 찾기</a>';
   html += '<div class="small muted" style="margin:14px 0 5px">마음에 드는 영상 주소를 붙여넣으면 다음부터 바로 열립니다'+
           (saved?' (지우고 저장하면 해제)':'')+'</div>'+
           '<input id="vIn" placeholder="https://youtu.be/..." value="'+esc(saved||'')+'">';
-  sheet(name, html, function(){
+  var sh = sheet(name, html, function(){
     var v=$('#vIn').value.trim();
     if(v) D.vids[name]=v; else delete D.vids[name];
     save(); toast(v?'영상을 저장했습니다':'저장을 해제했습니다');
   }, '영상 저장', '닫기');
+  sh.querySelector('#gCnt').onclick=function(){ counter(name, 0, null); };
+  sh.querySelector('#gSw').onclick=function(){ stopwatch(name, null); };
+}
+function ytId(u){
+  var m=String(u).match(/(?:youtu\.be\/|[?&]v=|shorts\/|embed\/|live\/)([A-Za-z0-9_-]{11})/);
+  return m?m[1]:null;
 }
 
 /* ══ 웨이트 ══ */
@@ -408,7 +545,7 @@ function renderWeight(){
     var c=document.createElement('div'); c.className='card';
     var h='<div class="row"><div class="grow"><div class="exname">'+esc(n)+'</div>'+
       '<div class="prev">'+prevText(n)+'</div></div>'+
-      '<button class="gbtn" data-g="'+esc(n)+'">▶</button>'+
+      '<button class="gbtn" data-g="'+esc(n)+'">자세 ▶</button>'+
       '<button class="btn ghost" style="width:auto;padding:9px 14px" data-add="'+esc(n)+'">＋ 세트</button></div>';
     sets.forEach(function(s,i){
       h+='<div class="setline"><span class="setno num">'+(i+1)+'</span>'+
@@ -437,16 +574,21 @@ function addSet(n){
   var o=day(cur), sets=o.w[n]||[], last=sets[sets.length-1];
   if(!last){ var ks=Object.keys(D.days).filter(function(k){return k<cur&&D.days[k].w&&D.days[k].w[n];}).sort();
     if(ks.length){ var p=D.days[ks[ks.length-1]].w[n]; last=p[p.length-1]; } }
-  sheet(n+' — '+(sets.length+1)+'세트',
+  var sh=sheet(n+' — '+(sets.length+1)+'세트',
     '<div class="row"><div class="grow"><div class="small muted" style="margin-bottom:5px">중량 kg</div>'+
     '<input type="number" inputmode="decimal" id="sKg" value="'+(last?last.kg:'')+'"></div>'+
     '<div class="grow"><div class="small muted" style="margin-bottom:5px">횟수</div>'+
-    '<input type="number" inputmode="numeric" id="sRep" value="'+(last?last.rep:'')+'"></div></div>',
+    '<input type="number" inputmode="numeric" id="sRep" value="'+(last?last.rep:'')+'"></div></div>'+
+    '<button class="btn ghost" id="sCnt" style="margin-top:10px">👆 횟수 세면서 하기</button>',
     function(){
       var kg=parseFloat($('#sKg').value), rep=parseInt($('#sRep').value,10);
       if(isNaN(kg)||isNaN(rep)){ toast('중량과 횟수를 입력하세요'); return false; }
-      o.w[n]=sets; sets.push({kg:kg,rep:rep}); save(); renderWeight(); toast('기록했습니다');
+      o.w[n]=sets; sets.push({kg:kg,rep:rep}); save(); renderWeight();
+      if(REST){ startRest(REST); toast('기록 · 휴식 '+REST+'초'); } else toast('기록했습니다');
     },'세트 추가');
+  sh.querySelector('#sCnt').onclick=function(){
+    counter(n+' 횟수', parseInt($('#sRep').value,10)||0, function(v){ $('#sRep').value=v; });
+  };
 }
 $('#addExBtn').onclick=function(){
   sheet('종목 추가','<input id="exNew" placeholder="예: 인클라인 벤치프레스">'+
@@ -470,7 +612,7 @@ function renderCardio(){
     }
     c.innerHTML='<div class="row"><div class="grow"><div class="exname">'+esc(r.type)+'</div>'+
       '<div class="prev num">'+r.min+'분'+(r.km?' · '+r.km+'km':'')+extra+(r.kcal?' · '+r.kcal+'kcal':'')+'</div></div>'+
-      '<button class="gbtn">▶</button><button class="del" data-i="'+i+'">×</button></div>';
+      '<button class="gbtn">자세 ▶</button><button class="del" data-i="'+i+'">×</button></div>';
     c.querySelector('.gbtn').onclick=function(){ guide(r.type); };
     c.querySelector('.del').onclick=function(){ o.c.splice(i,1); save(); renderCardio(); };
     L.appendChild(c);
@@ -478,20 +620,24 @@ function renderCardio(){
 }
 $('#addCardioBtn').onclick=function(){
   var opts=CARDIO.map(function(t){return '<option>'+t+'</option>'}).join('');
-  sheet('유산소 기록',
+  var sh=sheet('유산소 기록',
     '<div class="small muted" style="margin-bottom:5px">종류</div><select id="cT">'+opts+'</select>'+
     '<div class="row" style="margin-top:11px"><div class="grow"><div class="small muted" style="margin-bottom:5px">시간 분</div>'+
     '<input type="number" inputmode="numeric" id="cM"></div>'+
     '<div class="grow"><div class="small muted" style="margin-bottom:5px">거리 km</div>'+
     '<input type="number" inputmode="decimal" id="cK"></div></div>'+
     '<div style="margin-top:11px"><div class="small muted" style="margin-bottom:5px">소모 칼로리 (선택)</div>'+
-    '<input type="number" inputmode="numeric" id="cC"></div>',
+    '<input type="number" inputmode="numeric" id="cC"></div>'+
+    '<button class="btn ghost" id="cSw" style="margin-top:10px">⏱ 스톱워치로 재기</button>',
     function(){
       var m=parseInt($('#cM').value,10);
       if(isNaN(m)||m<=0){ toast('시간을 입력하세요'); return false; }
       day(cur).c.push({type:$('#cT').value, min:m, km:parseFloat($('#cK').value)||0, kcal:parseInt($('#cC').value,10)||0});
       save(); renderCardio(); toast('기록했습니다');
     });
+  sh.querySelector('#cSw').onclick=function(){
+    stopwatch($('#cT').value, function(m){ $('#cM').value=m; });
+  };
 };
 
 /* ══ 홈트 ══ */
@@ -503,7 +649,7 @@ function renderHome(){
     if(o.r[n]) done++;
     var el=document.createElement('div');
     el.className='check'+(o.r[n]?' done':'');
-    el.innerHTML='<div class="box">✓</div><div class="grow">'+esc(n)+'</div><button class="gbtn">▶</button>';
+    el.innerHTML='<div class="box">✓</div><div class="grow">'+esc(n)+'</div><button class="gbtn">자세 ▶</button>';
     el.querySelector('.gbtn').onclick=function(e){ e.stopPropagation(); guide(n); };
     el.onclick=function(){ if(o.r[n]) delete o.r[n]; else o.r[n]=1; save(); renderHome(); };
     L.appendChild(el);
@@ -663,6 +809,17 @@ function applyTheme(t){
   var b=$('#themeBtn');
   if(b) b.textContent = t==='dark' ? '밝은 화면으로 바꾸기' : '어두운 화면으로 바꾸기';
 }
+var RESTS=[0,60,90,120,180];
+function drawRestBtn(){
+  $('#restBtn').textContent = '세트 사이 휴식 타이머 : ' + (REST? REST+'초' : '사용 안 함');
+}
+$('#restBtn').onclick=function(){
+  var i=RESTS.indexOf(REST); REST=RESTS[(i+1)%RESTS.length];
+  try{ localStorage.setItem('undong_rest', REST); }catch(e){}
+  if(!REST) stopRest();
+  drawRestBtn();
+};
+drawRestBtn();
 $('#themeBtn').onclick=function(){
   applyTheme(document.documentElement.getAttribute('data-theme')==='dark' ? 'light' : 'dark');
 };
