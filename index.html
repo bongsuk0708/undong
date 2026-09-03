@@ -16,7 +16,7 @@
   --text:#1a2027; --muted:#6b7684; --onAccent:#ffffff;
   --glass:rgba(244,246,249,.93);
   --shadow:0 1px 2px rgba(26,32,39,.05), 0 2px 10px rgba(26,32,39,.05);
-  --weight:#a35c00; --cardio:#0b6e5c; --home:#3a55b8; --body:#c0433d;
+  --weight:#a35c00; --cardio:#0b6e5c; --diet:#7a4bb5; --home:#3a55b8; --body:#c0433d;
   --accent:var(--weight);
 }
 /* 어두운 화면 */
@@ -25,7 +25,7 @@ html[data-theme="dark"]{
   --text:#e8edf2; --muted:#8a96a3; --onAccent:#14181d;
   --glass:rgba(20,24,29,.94);
   --shadow:none;
-  --weight:#f2a03d; --cardio:#4fb8a0; --home:#7e9bf5; --body:#e0736e;
+  --weight:#f2a03d; --cardio:#4fb8a0; --diet:#c39bf0; --home:#7e9bf5; --body:#e0736e;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0;background:var(--bg);color:var(--text)}
@@ -144,9 +144,9 @@ h2:first-child{margin-top:2px}
 nav{position:fixed;bottom:0;left:0;right:0;z-index:30;display:flex;
   background:var(--glass);backdrop-filter:blur(12px);border-top:1px solid var(--line);
   padding-bottom:env(safe-area-inset-bottom)}
-nav button{flex:1;padding:9px 2px 10px;color:var(--muted);font-size:11px;
+nav button{flex:1;padding:9px 1px 10px;color:var(--muted);font-size:10.5px;
   display:flex;flex-direction:column;align-items:center;gap:3px}
-nav button .ic{font-size:20px;line-height:1}
+nav button .ic{font-size:19px;line-height:1}
 nav button.on{color:var(--accent);font-weight:700}
 
 .chart{width:100%;height:150px;display:block}
@@ -198,8 +198,22 @@ nav button.on{color:var(--accent);font-weight:700}
 
   <!-- 유산소 -->
   <section id="v-cardio" class="hide">
+    <div id="stepBox"></div>
     <div id="cardioList"></div>
     <button class="btn" id="addCardioBtn">＋ 유산소 기록</button>
+  </section>
+
+  <!-- 식단 -->
+  <section id="v-diet" class="hide">
+    <div class="stat">
+      <div><div class="v num" id="dIn">0</div><div class="l">먹은 kcal</div></div>
+      <div><div class="v num" id="dGoal">—</div><div class="l">목표 kcal</div></div>
+      <div><div class="v num" id="dLeft">—</div><div class="l">남은 kcal</div></div>
+    </div>
+    <div class="chips" id="favChips"></div>
+    <div id="foodList"></div>
+    <button class="btn" id="addFoodBtn">＋ 먹은 것 기록</button>
+    <div id="dietNote"></div>
   </section>
 
   <!-- 홈트 -->
@@ -248,6 +262,7 @@ nav button.on{color:var(--accent);font-weight:700}
 <nav>
   <button data-v="weight" class="on"><span class="ic">🏋️</span>웨이트</button>
   <button data-v="cardio"><span class="ic">🏃</span>유산소</button>
+  <button data-v="diet"><span class="ic">🍚</span>식단</button>
   <button data-v="home"><span class="ic">✅</span>홈트</button>
   <button data-v="body"><span class="ic">⚖️</span>몸</button>
   <button data-v="log"><span class="ic">📆</span>기록</button>
@@ -276,15 +291,15 @@ var DB_ROOT = 'undong';   // minwon 데이터와 섞이지 않도록 별도 경�
 /* ── 상태 ── */
 var DEFAULT_EX = ['벤치프레스','랫풀다운','스쿼트','레그프레스','숄더프레스','바벨로우','레그컬','레그익스텐션','케이블 푸시다운','덤벨컬','플랭크'];
 var DEFAULT_ROUTINE = ['스트레칭 5분','팔굽혀펴기 20회','스쿼트 30회','플랭크 1분','윗몸일으키기 30회'];
-var D = { days:{}, exercises:DEFAULT_EX.slice(), routine:DEFAULT_ROUTINE.slice(), body:{}, vids:{}, profile:null };
+var D = { days:{}, exercises:DEFAULT_EX.slice(), routine:DEFAULT_ROUTINE.slice(), body:{}, vids:{}, profile:null, favs:{} };
 var cur = todayKey(), view='weight', curEx=null, fb=null, online=false;
 
 function todayKey(){ var d=new Date(); return ymd(d); }
 function ymd(d){ return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
 function pad(n){ return n<10?'0'+n:''+n; }
 function $(s){ return document.querySelector(s); }
-function day(k){ if(!D.days[k]) D.days[k]={w:{},c:[],r:{}}; var o=D.days[k];
-  o.w=o.w||{}; o.c=o.c||[]; o.r=o.r||{}; return o; }
+function day(k){ if(!D.days[k]) D.days[k]={w:{},c:[],r:{},f:[]}; var o=D.days[k];
+  o.w=o.w||{}; o.c=o.c||[]; o.r=o.r||{}; o.f=o.f||[]; return o; }
 function toast(m){ var t=$('#toast'); t.textContent=m; t.classList.add('on');
   clearTimeout(t._t); t._t=setTimeout(function(){t.classList.remove('on')},1500); }
 
@@ -296,7 +311,7 @@ function save(){
 function loadLocal(){
   try{ var s=localStorage.getItem('undong_data');
     if(s){ var o=JSON.parse(s);
-      D.days=o.days||{}; D.body=o.body||{}; D.vids=o.vids||{}; D.profile=o.profile||null;
+      D.days=o.days||{}; D.body=o.body||{}; D.vids=o.vids||{}; D.profile=o.profile||null; D.favs=o.favs||{};
       D.exercises=(o.exercises&&o.exercises.length)?o.exercises:DEFAULT_EX.slice();
       D.routine=(o.routine&&o.routine.length)?o.routine:DEFAULT_ROUTINE.slice();
     }
@@ -315,6 +330,7 @@ function initFirebase(){
       if(o){
         D.days=o.days||D.days; D.body=o.body||D.body; D.vids=o.vids||D.vids;
         if(o.profile) D.profile=o.profile;
+        D.favs=o.favs||D.favs;
         if(o.exercises&&o.exercises.length) D.exercises=o.exercises;
         if(o.routine&&o.routine.length) D.routine=o.routine;
         try{ localStorage.setItem('undong_data',JSON.stringify(D)); }catch(e){}
@@ -341,7 +357,7 @@ function askConfig(){
       location.reload(); return true;
     }, '연결하기', '나중에');
 }
-var APP_VER='v6';
+var APP_VER='v8';
 function renderSync(){
   $('#sync').innerHTML = (fb ? (online? 'Firebase 연결됨 · 자동 저장 중' : '오프라인 · 폰에 저장 중, 연결되면 동기화')
     : '<span style="cursor:pointer;text-decoration:underline">Firebase 미연결 — 연결 설정하기</span>')
@@ -585,6 +601,32 @@ var TIPS = {
  '자전거':['안장 높이는 페달이 가장 낮을 때 무릎이 살짝 굽는 정도','무릎이 안팎으로 벌어지지 않게','손목과 어깨에 체중을 싣지 않는다'],
  '등산':['보폭을 줄이고 발바닥 전체로 딛는다','내려올 때 무릎이 상하므로 더 천천히','스틱을 쓰면 무릎 부담이 크게 준다']
 };
+var DESC = {
+ '벤치프레스':['가슴 · 삼두 · 어깨앞','상체로 미는 힘의 기본이 되는 운동입니다. 가슴 전체를 두껍게 만들고 팔 뒤쪽과 어깨 앞도 같이 쓰입니다. 처음이면 봉만 들고(약 20kg) 자세부터 익히세요.','8~12회 3~4세트'],
+ '랫풀다운':['등 넓이 · 이두','턱걸이를 기계로 쉽게 하는 운동입니다. 등을 넓게 만들고, 하루 종일 앉아 있어 굽은 등을 펴는 데도 도움이 됩니다.','10~15회 3세트'],
+ '스쿼트':['허벅지 앞 · 엉덩이 · 허리','하체 운동의 기본이자 사실상 전신 운동입니다. 몸에서 근육이 가장 큰 부위를 쓰기 때문에 칼로리 소모도 큽니다. 무릎이 안 좋으면 반만 앉았다 일어나셔도 효과가 있습니다.','8~12회 3~4세트'],
+ '레그프레스':['허벅지 · 엉덩이','스쿼트와 쓰는 부위는 비슷한데 허리 부담이 훨씬 적습니다. 허리가 안 좋거나 스쿼트 자세가 아직 불안하면 이쪽부터 하세요.','10~15회 3세트'],
+ '숄더프레스':['어깨 · 삼두','어깨 선을 만드는 운동입니다. 어깨 관절은 다치기 쉬우니 가벼운 무게로 시작해 천천히 올리세요.','10~12회 3세트'],
+ '바벨로우':['등 두께 · 이두','랫풀다운이 등 넓이라면 이건 등 두께를 만듭니다. 허리를 곧게 유지하지 못하면 다치기 쉬우니 무게 욕심을 내지 마세요.','8~12회 3세트'],
+ '레그컬':['허벅지 뒤','앞허벅지만 키우면 앞뒤 균형이 깨져 무릎에 부담이 갑니다. 뒤쪽도 같이 해주는 게 좋습니다.','12~15회 3세트'],
+ '레그익스텐션':['허벅지 앞','무릎 주변 근육을 강화합니다. 하체 운동 마무리로 쓰기 좋습니다. 무릎이 아프면 각도를 줄이세요.','12~15회 3세트'],
+ '케이블 푸시다운':['팔 뒤(삼두)','팔뚝 굵기의 3분의 2는 앞이 아니라 뒤쪽 근육입니다. 팔을 키우려면 이쪽이 더 중요합니다.','12~15회 3세트'],
+ '덤벨컬':['팔 앞(이두)','알통을 만드는 운동입니다. 반동을 쓰면 효과가 크게 떨어지니 천천히 하세요.','12~15회 3세트'],
+ '플랭크':['복부 · 허리(코어)','허리 통증 예방에 가장 효과적인 운동으로 꼽힙니다. 몸통을 버티는 힘을 길러 다른 운동의 자세도 좋아집니다.','30초~1분 3세트'],
+ '팔굽혀펴기':['가슴 · 삼두 · 코어','기구 없이 상체 전체를 쓰는 운동입니다. 힘들면 무릎을 바닥에 대고 하셔도 충분히 효과가 있습니다.','10~20회 3세트'],
+ '윗몸일으키기':['복부','배 앞쪽 근육을 씁니다. 허리가 아프시면 상체를 조금만 드는 크런치나 플랭크로 바꾸세요.','15~30회 3세트'],
+ '스트레칭':['전신 유연성','운동 전에는 몸을 움직이며 푸는 동적 스트레칭, 운동 후에는 자세를 멈춰 늘리는 정적 스트레칭이 맞습니다.','5~10분'],
+ '걷기':['유산소 · 하체','무릎 부담이 적어 매일 해도 됩니다. 나이가 있으실수록 가장 안전하면서 효과가 확실한 운동입니다.','하루 30~60분'],
+ '달리기':['유산소 · 하체','같은 시간에 걷기보다 두 배 넘게 소모합니다. 다만 체중이 많이 나가면 무릎에 부담이 크니 걷기로 기초를 만든 뒤에 시작하세요.','20~40분'],
+ '자전거':['유산소 · 허벅지','체중이 안장에 실려 무릎 부담이 적습니다. 무릎이 안 좋은 분께 권할 만합니다.','30~60분'],
+ '등산':['유산소 · 하체 전체','오르막은 심폐와 하체를 같이 단련합니다. 다만 내려올 때 무릎에 체중의 서너 배가 실리니 천천히 내려오세요.','1~3시간'],
+ '수영':['전신 유산소','관절에 거의 부담이 없어 허리나 무릎이 안 좋은 분께 좋습니다.','30~40분']
+};
+function descFor(name){
+  if(DESC[name]) return DESC[name];
+  var k=Object.keys(DESC).filter(function(t){ return name.indexOf(t)>=0; });
+  return k.length ? DESC[k[0]] : null;
+}
 function tipsFor(name){
   if(TIPS[name]) return TIPS[name];
   var k = Object.keys(TIPS).filter(function(t){ return name.indexOf(t)>=0; });
@@ -593,7 +635,12 @@ function tipsFor(name){
 function guide(name){
   var t = tipsFor(name), saved = D.vids[name];
   var q = encodeURIComponent(name.replace(/\s*\d+[회분초]\s*/g,'').trim()+' 자세');
-  var html='';
+  var html='', dc=descFor(name);
+  if(dc){
+    html += '<div class="small" style="margin:-4px 0 10px"><span class="badge" style="margin:0">'+esc(dc[0])+'</span>'+
+            '<span class="badge" style="margin-left:6px">권장 '+esc(dc[2])+'</span></div>'+
+            '<div style="font-size:14.5px;line-height:1.75;margin-bottom:12px">'+esc(dc[1])+'</div>';
+  }
   if(t) html += '<div class="tip">'+t.map(function(s,i){return '<b>'+(i+1)+'</b> '+esc(s);}).join('<br>')+'</div>';
   else html += '<div class="tip muted">저장된 요령이 없는 종목입니다. 아래에서 영상으로 확인하세요.</div>';
   var yid = saved ? ytId(saved) : null;
@@ -649,9 +696,10 @@ function renderWeight(){
     sets.forEach(function(s){ vol += (s.kg||0)*(s.rep||0); });
     tot+=vol;
     var c=document.createElement('div'); c.className='card';
-    var h='<div class="row"><div class="grow"><div class="exname">'+esc(n)+'</div>'+
-      '<div class="prev">'+prevText(n)+'</div></div>'+
-      '<button class="gbtn" data-g="'+esc(n)+'">자세 ▶</button>'+
+    var h='<div class="row"><div class="grow" data-g="'+esc(n)+'" style="cursor:pointer">'+
+      '<div class="exname">'+esc(n)+'</div>'+
+      '<div class="prev">'+prevText(n)+' · 설명 보기 ›</div></div>'+
+      '<button class="gbtn" data-g="'+esc(n)+'">설명 ▶</button>'+
       '<button class="btn ghost" style="width:auto;padding:9px 14px" data-add="'+esc(n)+'">＋ 세트</button></div>';
     sets.forEach(function(s,i){
       h+='<div class="setline"><span class="setno num">'+(i+1)+'</span>'+
@@ -709,6 +757,7 @@ $('#addExBtn').onclick=function(){
 /* ══ 유산소 ══ */
 var CARDIO=['걷기','달리기','자전거','등산','수영','기타'];
 function renderCardio(){
+  renderSteps();
   var o=day(cur), L=$('#cardioList'); L.innerHTML='';
   if(!o.c.length){ L.innerHTML='<div class="empty">오늘 유산소 기록이 없습니다</div>'; return; }
   o.c.forEach(function(r,i){
@@ -718,10 +767,11 @@ function renderCardio(){
       if(r.type==='자전거'){ extra=' · '+(r.km/(r.min/60)).toFixed(1)+' km/h'; }
       else { var p=r.min/r.km; extra=' · '+Math.floor(p)+"'"+pad(Math.round((p%1)*60))+'" /km'; }
     }
-    c.innerHTML='<div class="row"><div class="grow"><div class="exname">'+esc(r.type)+'</div>'+
+    c.innerHTML='<div class="row"><div class="grow" id="cN'+i+'" style="cursor:pointer"><div class="exname">'+esc(r.type)+'</div>'+
       '<div class="prev num">'+r.min+'분'+(r.km?' · '+r.km+'km':'')+extra+(r.kcal? ' · '+r.kcal+'kcal' : (kcalOf(r,cur)? ' · 약 '+kcalOf(r,cur)+'kcal':''))+'</div></div>'+
-      '<button class="gbtn">자세 ▶</button><button class="del" data-i="'+i+'">×</button></div>';
+      '<button class="gbtn">설명 ▶</button><button class="del" data-i="'+i+'">×</button></div>';
     c.querySelector('.gbtn').onclick=function(){ guide(r.type); };
+    c.querySelector('#cN'+i).onclick=function(){ guide(r.type); };
     c.querySelector('.del').onclick=function(){ o.c.splice(i,1); save(); renderCardio(); };
     L.appendChild(c);
   });
@@ -748,6 +798,144 @@ $('#addCardioBtn').onclick=function(){
   };
 };
 
+/* ══ 걸음수 ══ */
+function renderSteps(){
+  var o=day(cur), st=o.steps||0, w=weightOn(cur)||70;
+  var km=(st*0.0007), kc=Math.round(st*w*0.0005);
+  $('#stepBox').innerHTML='<div class="card"><div class="row">'+
+    '<div class="grow"><div class="exname num">'+fmt(st)+' 걸음</div>'+
+    '<div class="prev num">'+(st? '약 '+km.toFixed(1)+'km · 약 '+fmt(kc)+'kcal' : '삼성 헬스에서 보고 적어주세요')+'</div></div>'+
+    '<button class="btn ghost" style="width:auto;padding:9px 14px" id="stBtn">'+(st?'수정':'입력')+'</button></div></div>';
+  $('#stBtn').onclick=function(){
+    sheet(cur.slice(5).replace('-','/')+' 걸음수',
+      '<input type="number" inputmode="numeric" id="stIn" value="'+(st||'')+'" placeholder="예: 8500">'+
+      '<div class="small muted" style="margin-top:9px;line-height:1.6">삼성 헬스 앱을 열면 오늘 걸음수가 나옵니다. 그 숫자를 그대로 적으시면 거리와 칼로리는 자동 계산됩니다.</div>',
+      function(){
+        var v=parseInt($('#stIn').value,10);
+        if(isNaN(v)||v<0){ toast('걸음수를 확인해 주세요'); return false; }
+        day(cur).steps=v; save(); renderCardio(); toast('기록했습니다');
+      });
+  };
+}
+function stepKcal(k){
+  var o=D.days[k]; if(!o||!o.steps) return 0;
+  return Math.round(o.steps*(weightOn(k)||70)*0.0005);
+}
+
+/* ══ 식단 ══ */
+var FOODS=[
+ ['공기밥',300],['현미밥',310],['잡곡밥',300],['죽 1그릇',250],['김밥 1줄',480],
+ ['비빔밥',600],['볶음밥',650],['김치볶음밥',620],['제육덮밥',750],['불고기덮밥',700],
+ ['라면 1봉',500],['잔치국수',470],['칼국수',550],['물냉면',550],['비빔냉면',620],
+ ['짜장면',700],['짬뽕',690],['스파게티',700],['떡국',550],['수제비',480],
+ ['된장찌개',200],['김치찌개',250],['순두부찌개',300],['부대찌개',500],['미역국',120],
+ ['설렁탕',500],['갈비탕',550],['삼계탕',900],['육개장',400],['추어탕',450],
+ ['삼겹살 200g',700],['목살 200g',500],['소불고기 1인분',400],['갈비 1인분',600],
+ ['닭가슴살 100g',110],['닭다리구이 1개',180],['후라이드치킨 1조각',250],['양념치킨 1조각',290],
+ ['계란후라이 1개',100],['삶은계란 1개',78],['계란말이',200],
+ ['고등어구이 1토막',250],['연어구이 100g',200],['생선까스 1장',300],['참치캔 1개',200],
+ ['두부 반모',120],['김치 1접시',30],['나물 1접시',60],['샐러드 1접시',100],['잡채 1접시',250],
+ ['백반 정식',700],['돈까스',900],['초밥 10피스',500],['햄버거 세트',1000],['피자 1조각',280],
+ ['떡볶이 1인분',480],['순대 1인분',400],['만두 5개',350],['튀김 3개',350],['어묵 2꼬치',100],
+ ['바나나 1개',100],['사과 1개',95],['고구마 1개',130],['토마토 1개',22],['귤 1개',40],
+ ['우유 200ml',125],['요거트 1개',100],['두유 1팩',130],['견과류 한줌',180],
+ ['아메리카노',10],['카페라떼',180],['믹스커피 1봉',50],['콜라 355ml',150],['이온음료',130],
+ ['식빵 1장',80],['단팥빵',300],['크로아상',270],['과자 1봉',400],['초코바 1개',250],
+ ['아이스크림 1개',200],['떡 2개',200],['라이스케이크',120],
+ ['맥주 500ml',200],['소주 1병',400],['막걸리 1병',470],['와인 1잔',125]
+];
+function calGoal(){
+  var P=D.profile, w=weightOn(cur);
+  if(!P||!w) return 0;
+  var age=P.birth?(new Date().getFullYear()-P.birth):45;
+  var bmr=10*w+6.25*P.height-5*age+(P.sex==='f'?-161:5);
+  var tdee=bmr*(P.act||1.375), g=tdee;
+  if(P.goal && P.goal < w-0.5) g=tdee-350;
+  else if(P.goal && P.goal > w+0.5) g=tdee+300;
+  var floor = P.sex==='f'?1200:1500;
+  return Math.max(Math.round(g/10)*10, floor);
+}
+function burnedToday(){
+  var o=day(cur), kc=stepKcal(cur);
+  (o.c||[]).forEach(function(r){ kc+=kcalOf(r,cur); });
+  return kc;
+}
+function renderDiet(){
+  var o=day(cur), tot=0;
+  (o.f||[]).forEach(function(x){ tot+=x.k||0; });
+  var goal=calGoal();
+  $('#dIn').textContent=fmt(tot);
+  $('#dGoal').textContent=goal?fmt(goal):'—';
+  $('#dLeft').textContent=goal?fmt(goal-tot):'—';
+
+  var ch=$('#favChips'); ch.innerHTML='';
+  var favs=Object.keys(D.favs||{}).sort(function(a,b){ return D.favs[b]-D.favs[a]; }).slice(0,12);
+  favs.forEach(function(key){
+    var parts=key.split('|'), b=document.createElement('button');
+    b.className='chip'; b.textContent=parts[0];
+    b.onclick=function(){ putFood(parts[0], +parts[1]); };
+    ch.appendChild(b);
+  });
+
+  var L=$('#foodList'); L.innerHTML='';
+  if(!(o.f||[]).length){
+    L.innerHTML='<div class="empty">오늘 기록한 식사가 없습니다<br>자주 드시는 건 위쪽 목록을 누르면 바로 들어갑니다</div>';
+  }else{
+    o.f.forEach(function(x,i){
+      var c=document.createElement('div'); c.className='card';
+      c.innerHTML='<div class="row"><div class="grow"><div class="exname">'+esc(x.n)+'</div></div>'+
+        '<div class="num" style="font-weight:700">'+fmt(x.k)+'<span class="small muted"> kcal</span></div>'+
+        '<button class="del">×</button></div>';
+      c.querySelector('.del').onclick=function(){ o.f.splice(i,1); save(); renderDiet(); };
+      L.appendChild(c);
+    });
+  }
+  var note=$('#dietNote');
+  if(!goal){
+    note.innerHTML='<div class="small muted" style="padding:14px 4px 0;line-height:1.7">몸 탭에서 내 정보와 체중을 등록하면 목표 칼로리가 계산됩니다.</div>';
+  }else{
+    var burn=burnedToday();
+    note.innerHTML='<div class="an" style="margin-top:14px">'+
+      '<div class="r"><span>오늘 먹은 칼로리</span><b class="num">'+fmt(tot)+' kcal</b></div>'+
+      '<div class="r"><span>운동·걸음으로 쓴 칼로리</span><b class="num">'+fmt(burn)+' kcal</b></div>'+
+      '<div class="r"><span>목표 대비</span><b class="num">'+(tot<=goal? '여유 '+fmt(goal-tot)+' kcal' : fmt(tot-goal)+' kcal 초과')+'</b></div>'+
+      '</div><div class="small muted" style="padding:10px 4px 0;line-height:1.7">칼로리는 평균값 기준 어림값입니다. 숫자를 맞추는 것보다 무엇을 얼마나 먹는지 눈으로 보는 게 목적입니다. 며칠 넘겼다고 굶어서 메우지 마세요.</div>';
+  }
+}
+function putFood(n,k){
+  day(cur).f.push({n:n,k:k});
+  var key=n+'|'+k;
+  D.favs=D.favs||{}; D.favs[key]=(D.favs[key]||0)+1;
+  save(); renderDiet(); toast(n+' '+fmt(k)+'kcal');
+}
+$('#addFoodBtn').onclick=function(){
+  var sh=sheet('먹은 것 기록',
+    '<input id="fq" placeholder="음식 이름 검색 (예: 김치찌개)">'+
+    '<div id="fl" style="max-height:42vh;overflow:auto;margin-top:10px"></div>'+
+    '<div class="small muted" style="margin-top:12px">목록에 없으면 직접 넣으세요</div>'+
+    '<div class="row" style="margin-top:6px"><input id="fn" placeholder="음식 이름" class="grow">'+
+    '<input type="number" inputmode="numeric" id="fk" placeholder="kcal" style="width:100px"></div>',
+    function(){
+      var n=$('#fn').value.trim(), k=parseInt($('#fk').value,10);
+      if(!n||isNaN(k)){ toast('이름과 칼로리를 넣으세요'); return false; }
+      putFood(n,k);
+    },'직접 추가');
+  function drawList(){
+    var q=$('#fq').value.trim(), L=$('#fl');
+    var list=FOODS.filter(function(f){ return !q || f[0].indexOf(q)>=0; }).slice(0,60);
+    L.innerHTML='';
+    if(!list.length){ L.innerHTML='<div class="small muted" style="padding:14px 2px">찾는 음식이 없습니다. 아래에 직접 넣으세요.</div>'; return; }
+    list.forEach(function(f){
+      var r=document.createElement('div');
+      r.className='row'; r.style.cssText='padding:12px 2px;border-top:1px solid var(--line);cursor:pointer';
+      r.innerHTML='<span class="grow">'+esc(f[0])+'</span><span class="num muted small">'+fmt(f[1])+' kcal</span>';
+      r.onclick=function(){ sh.remove(); putFood(f[0], f[1]); };
+      L.appendChild(r);
+    });
+  }
+  $('#fq').oninput=drawList; drawList();
+};
+
 /* ══ 홈트 ══ */
 function renderHome(){
   var o=day(cur), L=$('#routineList'); L.innerHTML='';
@@ -757,7 +945,7 @@ function renderHome(){
     if(o.r[n]) done++;
     var el=document.createElement('div');
     el.className='check'+(o.r[n]?' done':'');
-    el.innerHTML='<div class="box">✓</div><div class="grow">'+esc(n)+'</div><button class="gbtn">자세 ▶</button>';
+    el.innerHTML='<div class="box">✓</div><div class="grow">'+esc(n)+'</div><button class="gbtn">설명 ▶</button>';
     el.querySelector('.gbtn').onclick=function(e){ e.stopPropagation(); guide(n); };
     el.onclick=function(){ if(o.r[n]) delete o.r[n]; else o.r[n]=1; save(); renderHome(); };
     L.appendChild(el);
@@ -987,8 +1175,11 @@ function summary(o){
     out.push('웨이트 '+ws.length+'종목 '+st+'세트 · '+fmt(v)+'kg');
   }
   (o.c||[]).forEach(function(r){ out.push(r.type+' '+r.min+'분'+(r.km?' '+r.km+'km':'')); });
+  if(o.steps) out.push('걸음 '+fmt(o.steps)+'보');
   var rd=Object.keys(o.r||{}).length;
   if(rd) out.push('홈트 '+rd+'개 완료');
+  var fk=0; (o.f||[]).forEach(function(x){ fk+=x.k||0; });
+  if(fk) out.push('식사 '+(o.f.length)+'건 · '+fmt(fk)+'kcal');
   return out;
 }
 
@@ -999,16 +1190,17 @@ function render(){
   renderHeader();
   if(view==='weight') renderWeight();
   else if(view==='cardio') renderCardio();
+  else if(view==='diet') renderDiet();
   else if(view==='home') renderHome();
   else if(view==='body') renderBody();
   else renderLog();
 }
-var ACC={weight:'--weight',cardio:'--cardio',home:'--home',body:'--body',log:'--cardio'};
+var ACC={weight:'--weight',cardio:'--cardio',diet:'--diet',home:'--home',body:'--body',log:'--cardio'};
 document.querySelectorAll('nav button').forEach(function(b){
   b.onclick=function(){
     view=b.dataset.v;
     document.querySelectorAll('nav button').forEach(function(x){ x.classList.toggle('on', x===b); });
-    ['weight','cardio','home','body','log'].forEach(function(v){ $('#v-'+v).classList.toggle('hide', v!==view); });
+    ['weight','cardio','diet','home','body','log'].forEach(function(v){ $('#v-'+v).classList.toggle('hide', v!==view); });
     document.documentElement.style.setProperty('--accent','var('+ACC[view]+')');
     window.scrollTo(0,0); render();
   };
