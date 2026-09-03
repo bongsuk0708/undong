@@ -192,7 +192,10 @@ nav button.on{color:var(--accent);font-weight:700}
   <section id="v-weight">
     <div class="chips" id="exChips"></div>
     <div id="exList"></div>
-    <button class="btn ghost" id="addExBtn" style="margin-top:4px">＋ 종목 추가</button>
+    <div class="row" style="margin-top:4px">
+      <button class="btn ghost" id="descBtn">📖 운동 설명</button>
+      <button class="btn ghost" id="addExBtn">＋ 종목 추가</button>
+    </div>
     <div class="volume" id="volTotal" style="text-align:center;border:none;margin-top:14px"></div>
   </section>
 
@@ -357,7 +360,7 @@ function askConfig(){
       location.reload(); return true;
     }, '연결하기', '나중에');
 }
-var APP_VER='v8';
+var APP_VER='v9';
 function renderSync(){
   $('#sync').innerHTML = (fb ? (online? 'Firebase 연결됨 · 자동 저장 중' : '오프라인 · 폰에 저장 중, 연결되면 동기화')
     : '<span style="cursor:pointer;text-decoration:underline">Firebase 미연결 — 연결 설정하기</span>')
@@ -689,7 +692,8 @@ function renderWeight(){
   var L=$('#exList'), tot=0;
   L.innerHTML='';
   if(!used.length){
-    L.innerHTML='<div class="empty">위에서 종목을 눌러<br>오늘의 첫 세트를 기록하세요</div>';
+    L.innerHTML='<div class="empty">위에서 종목을 눌러 오늘의 첫 세트를 기록하세요<br>'+
+      '어떤 운동인지 궁금하면 아래 <b>📖 운동 설명</b>을 누르세요</div>';
   }
   used.forEach(function(n){
     var sets=o.w[n]||[], vol=0;
@@ -735,7 +739,9 @@ function addSet(n){
     '<input type="number" inputmode="decimal" id="sKg" value="'+(last?last.kg:'')+'"></div>'+
     '<div class="grow"><div class="small muted" style="margin-bottom:5px">횟수</div>'+
     '<input type="number" inputmode="numeric" id="sRep" value="'+(last?last.rep:'')+'"></div></div>'+
-    '<button class="btn ghost" id="sCnt" style="margin-top:10px">👆 횟수 세면서 하기</button>',
+    '<div class="row" style="margin-top:10px">'+
+    '<button class="btn ghost" id="sDesc">📖 운동 설명</button>'+
+    '<button class="btn ghost" id="sCnt">👆 횟수 세기</button></div>',
     function(){
       var kg=parseFloat($('#sKg').value), rep=parseInt($('#sRep').value,10);
       if(isNaN(kg)||isNaN(rep)){ toast('중량과 횟수를 입력하세요'); return false; }
@@ -745,7 +751,28 @@ function addSet(n){
   sh.querySelector('#sCnt').onclick=function(){
     counter(n+' 횟수', parseInt($('#sRep').value,10)||0, function(v){ $('#sRep').value=v; });
   };
+  sh.querySelector('#sDesc').onclick=function(){ guide(n); };
 }
+function guidePick(){
+  var list=D.exercises.concat(['걷기','달리기','자전거','등산','수영','팔굽혀펴기','윗몸일으키기','스트레칭']);
+  var seen={}, rows='';
+  list.forEach(function(n){
+    if(seen[n]) return; seen[n]=1;
+    var d=descFor(n);
+    rows+='<div class="row" data-p="'+esc(n)+'" style="padding:13px 2px;border-top:1px solid var(--line);cursor:pointer">'+
+      '<div class="grow"><div style="font-weight:600">'+esc(n)+'</div>'+
+      (d?'<div class="small muted">'+esc(d[0])+'</div>':'')+'</div><span class="muted">›</span></div>';
+  });
+  var sh=sheet('운동 설명 보기',
+    '<div class="small muted" style="margin-bottom:4px">종목을 누르면 부위·설명·자세 요령·영상이 나옵니다</div>'+
+    '<div style="max-height:56vh;overflow:auto">'+rows+'</div>',
+    function(){}, '닫기', '');
+  sh.querySelector('#_c').style.display='none';
+  sh.querySelectorAll('[data-p]').forEach(function(r){
+    r.onclick=function(){ sh.remove(); guide(r.dataset.p); };
+  });
+}
+$('#descBtn').onclick=guidePick;
 $('#addExBtn').onclick=function(){
   sheet('종목 추가','<input id="exNew" placeholder="예: 인클라인 벤치프레스">'+
     '<div class="small muted" style="margin-top:9px">목록에서 빼려면 이름을 비우고 저장하는 대신, 아래 목록에서 길게 누르세요.</div>',
