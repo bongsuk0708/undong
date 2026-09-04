@@ -171,6 +171,9 @@ h2:first-child{margin-top:2px}
 .tip{font-size:14.5px;line-height:1.75;color:var(--text);background:var(--surface2);
   border-radius:12px;padding:13px 14px;margin-bottom:12px}
 .tip b{color:var(--accent);font-weight:700}
+.prog{height:5px;border-radius:3px;background:var(--surface2);overflow:hidden;margin:9px 0 2px}
+.prog i{display:block;height:100%;background:var(--accent);border-radius:3px;transition:width .25s}
+.prog i.full{background:var(--cardio)}
 .volume{font-size:13px;color:var(--muted);margin-top:8px;padding-top:8px;border-top:1px solid var(--line)}
 .prev{font-size:12.5px;color:var(--muted);margin-top:3px}
 
@@ -240,6 +243,7 @@ nav button.on{color:var(--accent);font-weight:700}
 <main>
   <!-- 웨이트 -->
   <section id="v-weight">
+    <div class="chips" id="modeRow" style="margin-bottom:12px"></div>
     <div class="chips" id="exChips"></div>
     <div id="exList"></div>
     <div class="row" style="margin-top:4px">
@@ -304,9 +308,12 @@ nav button.on{color:var(--accent);font-weight:700}
       <div><div class="v num" id="lDays">0</div><div class="l">이번 달 운동일</div></div>
       <div><div class="v num" id="lVol">0</div><div class="l">이번 달 볼륨 t</div></div>
     </div>
+    <h2>종목별 변화</h2>
+    <div class="chips" id="exGChips"></div>
+    <div id="exGBox"></div>
+
     <h2>최근 기록</h2>
     <div id="logList"></div>
-    <button class="btn ghost" id="modeBtn" style="margin-top:16px"></button>
     <button class="btn ghost" id="restBtn" style="margin-top:8px"></button>
     <div class="small muted" style="margin:20px 0 8px">화면 스타일</div>
     <div class="chips" id="themeRow"></div>
@@ -368,8 +375,20 @@ function todayKey(){ var d=new Date(); return ymd(d); }
 function ymd(d){ return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate()); }
 function pad(n){ return n<10?'0'+n:''+n; }
 function $(s){ return document.querySelector(s); }
-function day(k){ if(!D.days[k]) D.days[k]={w:{},c:[],r:{},f:[]}; var o=D.days[k];
-  o.w=o.w||{}; o.c=o.c||[]; o.r=o.r||{}; o.f=o.f||[]; return o; }
+function day(k){ if(!D.days[k]) D.days[k]={w:{},c:[],r:{},f:[],g:{}}; var o=D.days[k];
+  o.w=o.w||{}; o.c=o.c||[]; o.r=o.r||{}; o.f=o.f||[]; o.g=o.g||{}; return o; }
+function recSets(n){
+  var d=descFor(n);
+  if(d){ var m=String(d[2]).match(/(\d+)(?:~(\d+))?\s*세트/); if(m) return parseInt(m[1],10); }
+  return 3;
+}
+function setGoal(n){
+  var o=day(cur);
+  if(o.g[n]) return o.g[n];
+  var ks=Object.keys(D.days).filter(function(k){ return k<cur && D.days[k].g && D.days[k].g[n]; }).sort();
+  if(ks.length) return D.days[ks[ks.length-1]].g[n];
+  return recSets(n);
+}
 function toast(m){ var t=$('#toast'); t.textContent=m; t.classList.add('on');
   clearTimeout(t._t); t._t=setTimeout(function(){t.classList.remove('on')},1500); }
 
@@ -427,7 +446,7 @@ function askConfig(){
       location.reload(); return true;
     }, '연결하기', '나중에');
 }
-var APP_VER='v15';
+var APP_VER='v19';
 function renderSync(){
   $('#sync').innerHTML = (fb ? (online? 'Firebase 연결됨 · 자동 저장 중' : '오프라인 · 폰에 저장 중, 연결되면 동기화')
     : '<span style="cursor:pointer;text-decoration:underline">Firebase 미연결 — 연결 설정하기</span>')
@@ -533,20 +552,53 @@ function tone(freq,dur,vol){
 function vib(v){ try{ if(navigator.vibrate) navigator.vibrate(v); }catch(e){} }
 var NUMK=['하나','둘','셋','넷','다섯','여섯','일곱','여덟','아홉','열'];
 function cycleInfo(n,goal){
-  if(goal && n>goal-10 && n<=goal){
+  if(goal>10 && n>goal-10 && n<=goal){
     var i=n-(goal-10);
     return { w:NUMK[i-1], last:true, first:i===1 };
   }
   var j=((n-1)%10)+1;
   return { w:NUMK[j-1], last:false, first:j===1 };
 }
-function say(n){
+var KOV=null;
+function loadVoices(){
   try{
-    if(!window.speechSynthesis) return;
+    var vs=speechSynthesis.getVoices()||[];
+    KOV=null;
+    for(var i=0;i<vs.length;i++){
+      var lg=(vs[i].lang||'').toLowerCase().replace('_','-');
+      if(lg.indexOf('ko')===0){ KOV=vs[i]; break; }
+    }
+  }catch(e){}
+}
+try{
+  if(window.speechSynthesis){
+    loadVoices();
+    speechSynthesis.onvoiceschanged=loadVoices;
+  }
+}catch(e){}
+function speechOK(){ return !!(window.speechSynthesis && window.SpeechSynthesisUtterance); }
+function primeSpeech(){
+  if(!speechOK()) return;
+  try{
     speechSynthesis.cancel();
-    var u=new SpeechSynthesisUtterance(String(n));
-    u.lang='ko-KR'; u.rate=1.3;
+    var u=new SpeechSynthesisUtterance('​');
+    u.volume=0.01; u.lang='ko-KR'; if(KOV) u.voice=KOV;
     speechSynthesis.speak(u);
+  }catch(e){}
+}
+function say(t){
+  if(!speechOK()) return;
+  try{
+    var ss=speechSynthesis;
+    if(ss.paused) ss.resume();
+    var go=function(){
+      var u=new SpeechSynthesisUtterance(String(t));
+      u.lang='ko-KR'; u.rate=1.15; u.pitch=1; u.volume=1;
+      if(KOV) u.voice=KOV;
+      ss.speak(u);
+    };
+    if(ss.speaking||ss.pending){ ss.cancel(); setTimeout(go,60); }
+    else go();
   }catch(e){}
 }
 
@@ -557,7 +609,7 @@ function counter(title, start, onDone){
     '<div class="ovtop"><div class="ttl">'+esc(title)+'</div><button id="_x">닫기</button></div>'+
     '<div class="ovtap" id="_tap"><div class="bignum num" id="_n">'+n+'</div>'+
     '<div id="_w" style="font-size:28px;font-weight:700;margin-top:2px;min-height:36px">&nbsp;</div>'+
-    '<div class="ovhint" id="_h">목표 횟수를 넣으면 숫자가 줄어듭니다</div></div>'+
+    '<div class="ovhint" id="_h">목표 횟수를 넣으면 그 수에서 멈춥니다</div></div>'+
     '<div class="small muted" style="margin-bottom:6px">세는 간격</div>'+
     '<div class="chips" id="_pace"></div>'+
     '<div class="row" style="margin-bottom:10px">'+
@@ -568,6 +620,7 @@ function counter(title, start, onDone){
     '<button class="btn" id="_s">시작</button>'+
     '<button class="btn ghost" id="_ok">완료</button></div>';
   document.body.appendChild(el);
+  if(VOICE) primeSpeech();
 
   var nEl=el.querySelector('#_n'), hEl=el.querySelector('#_h'), sEl=el.querySelector('#_s'),
       wEl=el.querySelector('#_w');
@@ -588,45 +641,38 @@ function counter(title, start, onDone){
   }
   function drawVoice(){
     var b=el.querySelector('#_v');
+    if(!speechOK()){ b.classList.remove('on'); b.textContent='음성 안 됨'; return; }
     b.classList.toggle('on', VOICE);
     b.textContent = VOICE ? '숫자 읽어줌' : '숫자 안 읽음';
   }
   function goalOf(){ return parseInt(el.querySelector('#_g').value,10)||0; }
-  function draw(){ var g=goalOf(); nEl.textContent = g ? Math.max(0,g-n) : n; }
+  function draw(){ nEl.textContent = n; }
   function step(){
     var g=goalOf();
     n++;
-    if(g){
-      var rem=g-n;
-      nEl.textContent=Math.max(0,rem);
-      if(rem<=0){
-        stop();
-        tone(1250,.3,.45); setTimeout(function(){ tone(1250,.35,.45); },280);
-        vib([200,110,260]); hEl.textContent='목표 '+g+'회 완료';
-        wEl.textContent='끝'; wEl.style.color='var(--body)';
-        if(VOICE) say('끝');
-        return;
-      }
-      var last = rem<=10;
-      wEl.textContent = last ? ((rem===10?'마지막 · ':'')+NUMK[rem-1]) : (rem+'회 남음');
-      wEl.style.color = last ? 'var(--body)' : 'var(--text)';
-      tone(rem===10?1150:880, .09, .32); vib(rem===10?[60,50,60]:22);
-      if(VOICE) say(rem===10 ? '마지막, 열' : (last ? NUMK[rem-1] : String(rem)));
-    }else{
-      nEl.textContent=n;
-      var ci=cycleInfo(n,0);
-      wEl.textContent=ci.w; wEl.style.color='var(--text)';
-      tone(880,.09,.32); vib(22);
-      if(VOICE) say(ci.w);
+    nEl.textContent=n;
+    var ci=cycleInfo(n,g);
+    var mark = ci.first && ci.last;
+    wEl.textContent = (mark?'마지막 · ':'')+ci.w;
+    wEl.style.color = ci.last ? 'var(--body)' : 'var(--text)';
+    if(VOICE) say((mark?'마지막, ':'')+ci.w);
+    if(g && n>=g){
+      stop();
+      tone(1250,.3,.45); setTimeout(function(){ tone(1250,.35,.45); },300);
+      vib([200,110,260]); hEl.textContent='목표 '+g+'회 완료';
+      if(VOICE) setTimeout(function(){ say('끝'); },800);
+      return;
     }
+    tone(mark?1150:880, .09, .32); vib(mark?[60,50,60]:22);
   }
   function tick(){ step(); }
   function go(){
     if(run) return;
+    if(VOICE) primeSpeech();
     run=true; tone(1100,.12,.35);
     iv=setInterval(tick,PACE);
     sEl.textContent='정지';
-    hEl.textContent = goalOf() ? (PACE/1000)+'초마다 · 남은 횟수를 셉니다'
+    hEl.textContent = goalOf() ? (PACE/1000)+'초마다 · '+goalOf()+'회에서 멈춥니다'
                                 : (PACE/1000)+'초마다 · 하나부터 열까지 반복';
     try{ if(navigator.wakeLock) navigator.wakeLock.request('screen').then(function(x){ wl=x; }).catch(function(){}); }catch(e){}
   }
@@ -645,6 +691,11 @@ function counter(title, start, onDone){
   el.querySelector('#_v').onclick=function(){
     VOICE=!VOICE; try{ localStorage.setItem('undong_voice', VOICE?'1':'0'); }catch(e){}
     drawVoice();
+    if(VOICE){
+      if(!speechOK()){ toast('이 브라우저는 음성을 지원하지 않습니다'); return; }
+      primeSpeech(); setTimeout(function(){ say('하나'); },120);
+      toast('시험 발음 — 안 들리면 크롬으로 여세요');
+    }
   };
   el.querySelector('#_x').onclick=close;
   el.querySelector('#_ok').onclick=function(){ stop(); el.remove(); if(onDone) onDone(n); };
@@ -878,6 +929,7 @@ function renderWeight(){
     var h='<div class="row"><div class="grow" data-g="'+esc(n)+'" style="cursor:pointer">'+
       '<div class="exname">'+esc(n)+'</div>'+
       '<div class="prev">'+prevText(n)+' · 설명 보기 ›</div></div>'+
+      '<button class="gbtn" data-gr="'+esc(n)+'">그래프</button>'+
       '<button class="gbtn" data-g="'+esc(n)+'">설명</button>'+
       '<button class="btn ghost" style="width:auto;padding:9px 14px" data-add="'+esc(n)+'">세트 추가</button></div>';
     sets.forEach(function(s,i){
@@ -886,13 +938,20 @@ function renderWeight(){
          '<button class="del" data-d="'+esc(n)+'" data-i="'+i+'">×</button></div>';
     });
     var rm=0; sets.forEach(function(s){ var e=s.kg*(1+s.rep/30); if(e>rm) rm=e; });
-    h+='<div class="volume num">볼륨 '+fmt(vol)+' kg · '+sets.length+'세트'+
+    var gl=setGoal(n), pct=Math.min(100, Math.round(sets.length/gl*100));
+    h+='<div class="prog"><i class="'+(sets.length>=gl?'full':'')+'" style="width:'+pct+'%"></i></div>'+
+       '<div class="volume num">'+sets.length+' / '+gl+' 세트'+
+       (sets.length>=gl?' · 목표 달성':'')+' · 볼륨 '+fmt(vol)+' kg'+
        (rm? ' · 추정 1RM '+rm.toFixed(0)+'kg':'')+'</div>'+
        '<div class="small muted" style="padding:2px 0 4px">번호를 누르면 순서 이동 · 기록을 누르면 수정</div>';
     c.innerHTML=h; L.appendChild(c);
   });
   L.querySelectorAll('[data-add]').forEach(function(b){ b.onclick=function(){ addSet(b.dataset.add); }; });
   L.querySelectorAll('[data-g]').forEach(function(b){ b.onclick=function(){ guide(b.dataset.g); }; });
+  L.querySelectorAll('[data-gr]').forEach(function(b){ b.onclick=function(){
+    EXSEL=b.dataset.gr;
+    var nav=document.querySelector('nav button[data-v="log"]'); if(nav) nav.click();
+  };});
   L.querySelectorAll('[data-ed]').forEach(function(b){ b.onclick=function(){ editSet(b.dataset.ed, +b.dataset.i); }; });
   L.querySelectorAll('[data-mv]').forEach(function(b){ b.onclick=function(){ moveSet(b.dataset.mv, +b.dataset.i); }; });
   L.querySelectorAll('[data-d]').forEach(function(b){ b.onclick=function(){
@@ -940,22 +999,41 @@ function addSet(n){
   var o=day(cur), sets=o.w[n]||[], last=sets[sets.length-1];
   if(!last){ var ks=Object.keys(D.days).filter(function(k){return k<cur&&D.days[k].w&&D.days[k].w[n];}).sort();
     if(ks.length){ var p=D.days[ks[ks.length-1]].w[n]; last=p[p.length-1]; } }
-  var sh=sheet(n+' — '+(sets.length+1)+'세트',
+  var reps=0;
+  var sh=sheet(n+' — '+(sets.length+1)+'세트 / 목표 '+setGoal(n)+'세트',
     '<div class="row"><div class="grow"><div class="small muted" style="margin-bottom:5px">중량 kg</div>'+
     '<input type="number" inputmode="decimal" id="sKg" value="'+(last?last.kg:'')+'"></div>'+
-    '<div class="grow"><div class="small muted" style="margin-bottom:5px">횟수</div>'+
-    '<input type="number" inputmode="numeric" id="sRep" value="'+(last?last.rep:'')+'"></div></div>'+
-    '<div class="row" style="margin-top:10px">'+
+    '<div class="grow"><div class="small muted" style="margin-bottom:5px">목표 세트</div>'+
+    '<input type="number" inputmode="numeric" id="sGoal" value="'+setGoal(n)+'"></div></div>'+
+    '<button class="btn ghost" id="sCnt" style="margin-top:10px">횟수 세기</button>'+
+    '<div class="row" style="margin-top:8px">'+
     '<button class="btn ghost" id="sDesc">운동 설명</button>'+
-    '<button class="btn ghost" id="sCnt">횟수 세기</button></div>',
+    '<button class="btn ghost" id="sMan">횟수 직접 입력</button></div>',
     function(){
-      var kg=parseFloat($('#sKg').value), rep=parseInt($('#sRep').value,10);
-      if(isNaN(kg)||isNaN(rep)){ toast('중량과 횟수를 입력하세요'); return false; }
-      o.w[n]=sets; sets.push({kg:kg,rep:rep}); save(); renderWeight();
-      if(REST){ startRest(REST); toast('기록 · 휴식 '+REST+'초'); } else toast('기록했습니다');
+      var kg=parseFloat($('#sKg').value);
+      if(isNaN(kg)){ toast('중량을 입력하세요'); return false; }
+      if(!reps){ toast('횟수를 세거나 직접 입력하세요'); return false; }
+      var gl=parseInt($('#sGoal').value,10); if(!isNaN(gl)&&gl>0) o.g[n]=gl;
+      o.w[n]=sets; sets.push({kg:kg,rep:reps}); save(); renderWeight();
+      var left=(o.g[n]||recSets(n))-sets.length;
+      if(left===0){ toast('목표 '+(o.g[n]||recSets(n))+'세트 완료'); if(REST) startRest(REST); }
+      else if(REST){ startRest(REST); toast((left>0?left+'세트 남음 · ':'')+'휴식 '+REST+'초'); }
+      else toast(left>0? left+'세트 남았습니다' : '기록했습니다');
     },'세트 추가');
+  function showReps(){
+    sh.querySelector('#sCnt').textContent = reps ? ('횟수 '+reps+'회 — 다시 세기') : '횟수 세기';
+  }
   sh.querySelector('#sCnt').onclick=function(){
-    counter(n+' 횟수', 0, function(v){ if(v>0) $('#sRep').value=v; });
+    counter(n+' 횟수', 0, function(v){ if(v>0){ reps=v; showReps(); } });
+  };
+  sh.querySelector('#sMan').onclick=function(){
+    sheet('횟수 직접 입력',
+      '<input type="number" inputmode="numeric" id="mRep" value="'+(reps||(last?last.rep:''))+'">',
+      function(){
+        var v=parseInt($('#mRep').value,10);
+        if(isNaN(v)||v<=0){ toast('횟수를 확인해 주세요'); return false; }
+        reps=v; showReps();
+      });
   };
   sh.querySelector('#sDesc').onclick=function(){ guide(n); };
 }
@@ -1375,8 +1453,103 @@ function drawChart(){
   $('#chartTo').textContent=(diff>0?'+':'')+diff+'kg';
 }
 
+/* ══ 종목별 그래프 ══ */
+var EXSEL=null, EXMET='mx';
+var METS=[['mx','최고 중량','kg'],['rm','추정 1RM','kg'],['vol','총 볼륨','kg'],['sets','세트 수','세트']];
+
+function exHistory(n){
+  var out=[];
+  Object.keys(D.days).sort().forEach(function(k){
+    var s=(D.days[k].w||{})[n];
+    if(!s||!s.length) return;
+    var mx=0, vol=0, rm=0;
+    s.forEach(function(x){
+      if(x.kg>mx) mx=x.kg;
+      vol+=(x.kg||0)*(x.rep||0);
+      var e=x.kg*(1+x.rep/30); if(e>rm) rm=e;
+    });
+    out.push({ k:k, mx:mx, vol:vol, rm:Math.round(rm), sets:s.length });
+  });
+  return out;
+}
+function lineChart(svg, vals){
+  var W=320,H=150,P=24;
+  svg.setAttribute('viewBox','0 0 '+W+' '+H);
+  if(vals.length<2){
+    svg.innerHTML='<text x="'+(W/2)+'" y="'+(H/2)+'" style="fill:var(--muted)" font-size="12" text-anchor="middle">기록이 2회 이상 쌓이면 그래프가 나옵니다</text>';
+    return;
+  }
+  var mn=Math.min.apply(null,vals), mx=Math.max.apply(null,vals);
+  if(mx-mn<1){ mn-=1; mx+=1; }
+  var pd=(mx-mn)*.18; mn-=pd; mx+=pd;
+  var pts=vals.map(function(v,i){
+    return [ P+(W-P*2)*i/(vals.length-1), P+(H-P*2)*(1-(v-mn)/(mx-mn)) ];
+  });
+  var line=pts.map(function(q){ return q[0].toFixed(1)+','+q[1].toFixed(1); }).join(' ');
+  var area='M'+pts[0][0].toFixed(1)+','+(H-P)+' L'+line.split(' ').join(' L')+' L'+pts[pts.length-1][0].toFixed(1)+','+(H-P)+' Z';
+  var dots=pts.map(function(q,i){
+    return '<circle cx="'+q[0].toFixed(1)+'" cy="'+q[1].toFixed(1)+'" r="'+(i===pts.length-1?4:2.4)+'" style="fill:var(--accent)"/>';
+  }).join('');
+  var lp=pts[pts.length-1];
+  svg.innerHTML=
+    '<defs><linearGradient id="eg" x1="0" y1="0" x2="0" y2="1">'+
+    '<stop offset="0" style="stop-color:var(--accent);stop-opacity:.20"/>'+
+    '<stop offset="1" style="stop-color:var(--accent);stop-opacity:0"/></linearGradient></defs>'+
+    '<path d="'+area+'" fill="url(#eg)"/>'+
+    '<polyline points="'+line+'" fill="none" style="stroke:var(--accent)" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>'+
+    dots+
+    '<text x="'+(lp[0]-6).toFixed(1)+'" y="'+(lp[1]-10).toFixed(1)+'" style="fill:var(--text)" font-size="12" font-weight="700" text-anchor="end">'+fmt(vals[vals.length-1])+'</text>';
+}
+function renderExGraph(){
+  var names=[];
+  Object.keys(D.days).forEach(function(k){
+    Object.keys(D.days[k].w||{}).forEach(function(n){
+      if((D.days[k].w[n]||[]).length && names.indexOf(n)<0) names.push(n);
+    });
+  });
+  var ch=$('#exGChips'), box=$('#exGBox');
+  ch.innerHTML='';
+  if(!names.length){
+    box.innerHTML='<div class="empty">웨이트 기록이 쌓이면<br>종목별로 변화를 볼 수 있습니다</div>';
+    return;
+  }
+  if(names.indexOf(EXSEL)<0) EXSEL=names[0];
+  names.forEach(function(n){
+    var b=document.createElement('button');
+    b.className='chip'+(n===EXSEL?' on':'');
+    b.textContent=n;
+    b.onclick=function(){ EXSEL=n; renderExGraph(); };
+    ch.appendChild(b);
+  });
+
+  var hist=exHistory(EXSEL);
+  var mets=METS.map(function(m){
+    return '<button class="chip'+(m[0]===EXMET?' on':'')+'" data-m="'+m[0]+'">'+m[1]+'</button>';
+  }).join('');
+  var unit='kg'; METS.forEach(function(m){ if(m[0]===EXMET) unit=m[2]; });
+  var vals=hist.map(function(x){ return x[EXMET]; });
+  var first=vals[0], last=vals[vals.length-1];
+  var diff=(vals.length>1)?(last-first):0;
+
+  box.innerHTML='<div class="chips" style="margin-bottom:6px">'+mets+'</div>'+
+    '<div class="card"><svg class="chart" id="exChart"></svg>'+
+    '<div class="row small muted" style="justify-content:space-between;margin-top:2px">'+
+      '<span>'+(hist.length?hist[0].k.slice(5).replace('-','/'):'')+'</span>'+
+      '<span>'+(hist.length?hist[hist.length-1].k.slice(5).replace('-','/'):'')+'</span></div></div>'+
+    '<div class="an"><div class="r"><span>운동한 날</span><b class="num">'+hist.length+' 일</b></div>'+
+    '<div class="r"><span>처음 기록</span><b class="num">'+(hist.length?fmt(first)+' '+unit:'—')+'</b></div>'+
+    '<div class="r"><span>최근 기록</span><b class="num">'+(hist.length?fmt(last)+' '+unit:'—')+'</b></div>'+
+    '<div class="r"><span>그동안 변화</span><b class="num">'+(vals.length>1?((diff>0?'+':'')+fmt(diff)+' '+unit):'—')+'</b></div></div>';
+
+  box.querySelectorAll('[data-m]').forEach(function(b){
+    b.onclick=function(){ EXMET=b.dataset.m; renderExGraph(); };
+  });
+  lineChart(box.querySelector('#exChart'), vals);
+}
+
 /* ══ 기록 ══ */
 function renderLog(){
+  renderExGraph();
   var mo=cur.slice(0,7), days=0, vol=0;
   Object.keys(D.days).forEach(function(k){
     if(k.slice(0,7)!==mo) return;
@@ -1421,6 +1594,7 @@ function fmt(n){ return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g
 function esc(s){ return String(s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
 function render(){
   renderHeader();
+  drawModeBtn();
   if(view==='weight') renderWeight();
   else if(view==='cardio') renderCardio();
   else if(view==='diet') renderDiet();
@@ -1454,11 +1628,19 @@ function setMode(m,first){
     if(added) save();
   }
   $('#gate').classList.add('hide');
-  drawModeBtn(); render();
+  render();
   if(!first) toast(m==='mid'?'중급으로 바꿨습니다':'초급으로 바꿨습니다');
 }
 function drawModeBtn(){
-  var b=$('#modeBtn'); if(b) b.textContent='지금 '+(MODE==='mid'?'중급':'초급')+' — 눌러서 바꾸기';
+  var w=$('#modeRow'); if(!w) return;
+  w.innerHTML='';
+  [['basic','초급'],['mid','중급']].forEach(function(m){
+    var b=document.createElement('button');
+    b.className='chip'+(MODE===m[0]?' on':'');
+    b.textContent=m[1];
+    b.onclick=function(){ if(MODE!==m[0]) setMode(m[0]); };
+    w.appendChild(b);
+  });
 }
 document.querySelectorAll('#gate .gcard').forEach(function(c){
   c.onclick=function(){ setMode(c.dataset.m, true); };
@@ -1491,7 +1673,6 @@ var RESTS=[0,60,90,120,180];
 function drawRestBtn(){
   $('#restBtn').textContent = '세트 사이 휴식 타이머 : ' + (REST? REST+'초' : '사용 안 함');
 }
-$('#modeBtn').onclick=function(){ setMode(MODE==='mid'?'basic':'mid'); };
 $('#restBtn').onclick=function(){
   var i=RESTS.indexOf(REST); REST=RESTS[(i+1)%RESTS.length];
   try{ localStorage.setItem('undong_rest', REST); }catch(e){}
