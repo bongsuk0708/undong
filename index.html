@@ -315,6 +315,7 @@ nav button.on{color:var(--accent);font-weight:700}
     <h2>최근 기록</h2>
     <div id="logList"></div>
     <button class="btn ghost" id="restBtn" style="margin-top:8px"></button>
+    <button class="btn ghost" id="voiceBtn" style="margin-top:8px">카운터 목소리 고르기</button>
     <div class="small muted" style="margin:20px 0 8px">화면 스타일</div>
     <div class="chips" id="themeRow"></div>
     <div id="sync"></div>
@@ -446,7 +447,7 @@ function askConfig(){
       location.reload(); return true;
     }, '연결하기', '나중에');
 }
-var APP_VER='v21';
+var APP_VER='v23';
 function renderSync(){
   $('#sync').innerHTML = (fb ? (online? 'Firebase 연결됨 · 자동 저장 중' : '오프라인 · 폰에 저장 중, 연결되면 동기화')
     : '<span style="cursor:pointer;text-decoration:underline">Firebase 미연결 — 연결 설정하기</span>')
@@ -561,16 +562,84 @@ function cycleInfo(n,goal){
   var j=((n-1)%10)+1;
   return { w:NUMK[j-1], last:false, first:j===1 };
 }
-var KOV=null;
+var KOVS=[], VSTYLE='strong', VNAME=null;
+try{ VSTYLE=localStorage.getItem('undong_vstyle')||'strong'; }catch(e){}
+try{ VNAME=localStorage.getItem('undong_vname')||null; }catch(e){}
+function allVoices(){ try{ return speechSynthesis.getVoices()||[]; }catch(e){ return []; } }
 function loadVoices(){
+  var vs=allVoices(); KOVS=[];
+  for(var i=0;i<vs.length;i++){
+    var lg=(vs[i].lang||'').toLowerCase().replace('_','-');
+    if(lg.indexOf('ko')===0) KOVS.push(vs[i]);
+  }
+}
+function curVoice(){
+  var vs=allVoices();
+  if(VNAME){ for(var i=0;i<vs.length;i++) if(vs[i].name===VNAME) return vs[i]; }
+  if(!KOVS.length) loadVoices();
+  return KOVS.length ? KOVS[0] : null;
+}
+function styleOf(u){
+  if(VSTYLE==='strong'){ u.rate=1.0; u.pitch=0.6; }
+  else if(VSTYLE==='high'){ u.rate=1.25; u.pitch=1.35; }
+  else { u.rate=1.15; u.pitch=1.0; }
+  u.volume=1; u.lang='ko-KR';
+}
+function sayWith(voice, text){
+  if(!speechOK()) return;
   try{
-    var vs=speechSynthesis.getVoices()||[];
-    KOV=null;
-    for(var i=0;i<vs.length;i++){
-      var lg=(vs[i].lang||'').toLowerCase().replace('_','-');
-      if(lg.indexOf('ko')===0){ KOV=vs[i]; break; }
-    }
+    var ss=speechSynthesis; ss.cancel();
+    setTimeout(function(){
+      var u=new SpeechSynthesisUtterance(String(text));
+      styleOf(u); if(voice) u.voice=voice;
+      ss.speak(u);
+    },60);
   }catch(e){}
+}
+function voicePicker(){
+  loadVoices();
+  var list = KOVS.length ? KOVS : allVoices();
+  var rows='';
+  if(!list.length){
+    rows='<div class="small muted" style="padding:16px 2px;line-height:1.7">폰에 설치된 목소리를 찾지 못했습니다. 설정 → 일반 → 텍스트 음성 변환에서 한국어 음성을 설치해 주세요.</div>';
+  }
+  list.forEach(function(v,i){
+    var on = (VNAME===v.name) || (!VNAME && i===0);
+    rows+='<div class="row" style="padding:12px 2px;border-top:1px solid var(--line)">'+
+      '<div class="grow"><div style="font-weight:600">'+esc(v.name)+(on?' <span class="badge">사용 중</span>':'')+'</div>'+
+      '<div class="small muted">'+esc(v.lang)+'</div></div>'+
+      '<button class="gbtn" data-pv="'+i+'">들어보기</button>'+
+      '<button class="gbtn" data-pk="'+i+'">고르기</button></div>';
+  });
+  var stl=[['strong','힘있게'],['normal','보통'],['high','높게']].map(function(s){
+    return '<button class="chip'+(VSTYLE===s[0]?' on':'')+'" data-st="'+s[0]+'">'+s[1]+'</button>';
+  }).join('');
+  var sh=sheet('목소리 고르기',
+    '<div class="small muted" style="margin-bottom:6px">목소리 세기</div>'+
+    '<div class="chips" style="margin-bottom:10px">'+stl+'</div>'+
+    '<div class="small muted" style="margin-bottom:2px">들어보고 고르세요</div>'+
+    '<div style="max-height:46vh;overflow:auto">'+rows+'</div>',
+    function(){}, '닫기', '');
+  sh.style.zIndex=110;
+  sh.querySelector('#_c').style.display='none';
+  sh.querySelectorAll('[data-st]').forEach(function(b){
+    b.onclick=function(){
+      VSTYLE=b.dataset.st; try{ localStorage.setItem('undong_vstyle',VSTYLE); }catch(e){}
+      sh.querySelectorAll('[data-st]').forEach(function(x){ x.classList.toggle('on', x===b); });
+      sayWith(curVoice(),'하나 둘 셋');
+    };
+  });
+  sh.querySelectorAll('[data-pv]').forEach(function(b){
+    b.onclick=function(){ sayWith(list[+b.dataset.pv], '하나 둘 셋'); };
+  });
+  sh.querySelectorAll('[data-pk]').forEach(function(b){
+    b.onclick=function(){
+      var v=list[+b.dataset.pk];
+      VNAME=v.name; try{ localStorage.setItem('undong_vname',VNAME); }catch(e){}
+      sayWith(v,'좋습니다'); toast(v.name+' 선택');
+      sh.remove(); voicePicker();
+    };
+  });
 }
 try{
   if(window.speechSynthesis){
@@ -584,7 +653,7 @@ function primeSpeech(){
   try{
     speechSynthesis.cancel();
     var u=new SpeechSynthesisUtterance('​');
-    u.volume=0.01; u.lang='ko-KR'; if(KOV) u.voice=KOV;
+    u.volume=0.01; u.lang='ko-KR'; var pv=curVoice(); if(pv) u.voice=pv;
     speechSynthesis.speak(u);
   }catch(e){}
 }
@@ -595,8 +664,8 @@ function say(t){
     if(ss.paused) ss.resume();
     var go=function(){
       var u=new SpeechSynthesisUtterance(String(t));
-      u.lang='ko-KR'; u.rate=1.15; u.pitch=1; u.volume=1;
-      if(KOV) u.voice=KOV;
+      styleOf(u);
+      var v=curVoice(); if(v) u.voice=v;
       ss.speak(u);
     };
     if(ss.speaking||ss.pending){ ss.cancel(); setTimeout(go,60); }
@@ -618,8 +687,8 @@ function counter(title, opts){
     '<div class="ovhint" id="_h">목표 횟수를 넣으면 그 수에서 멈춥니다</div></div>'+
     '<div class="small muted" style="margin-bottom:6px">세는 간격</div>'+
     '<div class="chips" id="_pace"></div>'+
+    '<div class="chips" id="_vrow" style="margin-bottom:8px"></div>'+
     '<div class="row" style="margin-bottom:10px">'+
-      '<button class="chip" id="_v" style="padding:12px 14px">숫자 읽어줌</button>'+
       '<input type="number" inputmode="numeric" id="_g" class="grow" placeholder="목표 횟수 (선택)" value="'+(opts.goal||'')+'">'+
     '</div>'+
     '<div class="ovbtm"><button class="btn ghost" id="_z">0으로</button>'+
@@ -650,11 +719,30 @@ function counter(title, opts){
       w.appendChild(b);
     });
   }
+  var STYLES=[['strong','힘있게'],['normal','보통'],['high','높게']];
+  function testSay(){
+    if(!VOICE || !speechOK()) return;
+    primeSpeech(); setTimeout(function(){ say('하나'); },140);
+  }
   function drawVoice(){
-    var b=el.querySelector('#_v');
-    if(!speechOK()){ b.classList.remove('on'); b.textContent='음성 안 됨'; return; }
-    b.classList.toggle('on', VOICE);
-    b.textContent = VOICE ? '숫자 읽어줌' : '숫자 안 읽음';
+    var w=el.querySelector('#_vrow'); w.innerHTML='';
+    function chip(txt,on,fn){
+      var b=document.createElement('button');
+      b.className='chip'+(on?' on':''); b.textContent=txt; b.onclick=fn;
+      w.appendChild(b); return b;
+    }
+    if(!speechOK()){ chip('음성 안 됨',false,function(){ toast('이 브라우저는 음성을 지원하지 않습니다'); }); return; }
+    chip(VOICE?'숫자 읽어줌':'숫자 안 읽음', VOICE, function(){
+      VOICE=!VOICE; try{ localStorage.setItem('undong_voice', VOICE?'1':'0'); }catch(e){}
+      drawVoice(); if(VOICE){ testSay(); toast('시험 발음'); }
+    });
+    STYLES.forEach(function(s){
+      chip(s[1], VSTYLE===s[0], function(){
+        VSTYLE=s[0]; try{ localStorage.setItem('undong_vstyle',s[0]); }catch(e){}
+        drawVoice(); testSay();
+      });
+    });
+    chip('목소리 고르기', false, voicePicker);
   }
 
   function step(){
@@ -666,7 +754,9 @@ function counter(title, opts){
     wEl.style.color = ci.last ? 'var(--body)' : 'var(--text)';
     if(VOICE) say((mark?'마지막, ':'')+ci.w);
     if(g && n>=g){ finishSet(g); return; }
-    tone(mark?1150:880,.09,.32); vib(mark?[60,50,60]:22);
+    var st=(VSTYLE==='strong');
+    tone(mark?(st?900:1150):(st?620:880), st?.12:.09, st?.42:.32);
+    vib(mark?[60,50,60]:(st?34:22));
   }
 
   function finishSet(g){
@@ -743,15 +833,6 @@ function counter(title, opts){
   };
   el.querySelector('#_z').onclick=function(){ n=0; draw(); wEl.innerHTML='&nbsp;'; };
   el.querySelector('#_g').oninput=function(){ if(!run && phase==='count'){ n=0; draw(); wEl.innerHTML='&nbsp;'; } };
-  el.querySelector('#_v').onclick=function(){
-    VOICE=!VOICE; try{ localStorage.setItem('undong_voice', VOICE?'1':'0'); }catch(e){}
-    drawVoice();
-    if(VOICE){
-      if(!speechOK()){ toast('이 브라우저는 음성을 지원하지 않습니다'); return; }
-      primeSpeech(); setTimeout(function(){ say('하나'); },120);
-      toast('시험 발음 — 안 들리면 크롬으로 여세요');
-    }
-  };
   el.querySelector('#_x').onclick=close;
   el.querySelector('#_ok').onclick=function(){
     stopTick();
@@ -1750,6 +1831,7 @@ var RESTS=[0,30,45,60,75,90];
 function drawRestBtn(){
   $('#restBtn').textContent = '세트 사이 휴식 타이머 : ' + (REST? REST+'초' : '사용 안 함');
 }
+$('#voiceBtn').onclick=function(){ primeSpeech(); voicePicker(); };
 $('#restBtn').onclick=function(){
   var i=RESTS.indexOf(REST); REST=RESTS[(i+1)%RESTS.length];
   try{ localStorage.setItem('undong_rest', REST); }catch(e){}
