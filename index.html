@@ -446,7 +446,7 @@ function askConfig(){
       location.reload(); return true;
     }, '연결하기', '나중에');
 }
-var APP_VER='v19';
+var APP_VER='v21';
 function renderSync(){
   $('#sync').innerHTML = (fb ? (online? 'Firebase 연결됨 · 자동 저장 중' : '오프라인 · 폰에 저장 중, 연결되면 동기화')
     : '<span style="cursor:pointer;text-decoration:underline">Firebase 미연결 — 연결 설정하기</span>')
@@ -502,8 +502,10 @@ function beep(times){
 }
 
 /* ══ 휴식 타이머 ══ */
-var REST=90, restEnd=0, restTm=null;
+var REST=60, restEnd=0, restTm=null;
 try{ var r=parseInt(localStorage.getItem('undong_rest'),10); if(!isNaN(r)) REST=r; }catch(e){}
+if(REST>90) REST=90;
+if(REST&&REST<30) REST=30;
 function startRest(sec){
   if(!sec) return;
   restEnd=Date.now()+sec*1000;
@@ -602,19 +604,23 @@ function say(t){
   }catch(e){}
 }
 
-function counter(title, start, onDone){
-  var n=start||0, run=false, iv=null, wl=null;
+function counter(title, opts){
+  opts = opts || {};
+  var SETS = opts.sets>0 ? opts.sets : 1;
+  var restSec = (opts.rest!=null) ? opts.rest : (REST||60);
+  var setNo = 1, n = 0, run = false, iv = null, wl = null, phase = 'count', lastBeep = 0;
+
   var el=document.createElement('div'); el.className='overlay';
   el.innerHTML=
     '<div class="ovtop"><div class="ttl">'+esc(title)+'</div><button id="_x">닫기</button></div>'+
-    '<div class="ovtap" id="_tap"><div class="bignum num" id="_n">'+n+'</div>'+
+    '<div class="ovtap" id="_tap"><div class="bignum num" id="_n">0</div>'+
     '<div id="_w" style="font-size:28px;font-weight:700;margin-top:2px;min-height:36px">&nbsp;</div>'+
     '<div class="ovhint" id="_h">목표 횟수를 넣으면 그 수에서 멈춥니다</div></div>'+
     '<div class="small muted" style="margin-bottom:6px">세는 간격</div>'+
     '<div class="chips" id="_pace"></div>'+
     '<div class="row" style="margin-bottom:10px">'+
-      '<button class="chip" id="_v" style="padding:12px 14px">숫자 읽어주기</button>'+
-      '<input type="number" inputmode="numeric" id="_g" placeholder="목표 횟수 (선택)" class="grow">'+
+      '<button class="chip" id="_v" style="padding:12px 14px">숫자 읽어줌</button>'+
+      '<input type="number" inputmode="numeric" id="_g" class="grow" placeholder="목표 횟수 (선택)" value="'+(opts.goal||'')+'">'+
     '</div>'+
     '<div class="ovbtm"><button class="btn ghost" id="_z">0으로</button>'+
     '<button class="btn" id="_s">시작</button>'+
@@ -622,9 +628,14 @@ function counter(title, start, onDone){
   document.body.appendChild(el);
   if(VOICE) primeSpeech();
 
-  var nEl=el.querySelector('#_n'), hEl=el.querySelector('#_h'), sEl=el.querySelector('#_s'),
-      wEl=el.querySelector('#_w');
+  var nEl=el.querySelector('#_n'), hEl=el.querySelector('#_h'),
+      sEl=el.querySelector('#_s'), wEl=el.querySelector('#_w');
 
+  function goalOf(){ return parseInt(el.querySelector('#_g').value,10)||0; }
+  function draw(){ nEl.textContent = n; }
+  function setLine(){
+    return SETS>1 ? (setNo+'세트 / 전체 '+SETS+'세트 · ') : '';
+  }
   function drawPace(){
     var w=el.querySelector('#_pace'); w.innerHTML='';
     PACES.forEach(function(ms){
@@ -634,7 +645,7 @@ function counter(title, start, onDone){
       b.onclick=function(){
         PACE=ms; try{ localStorage.setItem('undong_pace',ms); }catch(e){}
         drawPace();
-        if(run){ clearInterval(iv); iv=setInterval(tick,PACE); hEl.textContent=(PACE/1000)+'초마다 셉니다'; }
+        if(run && phase==='count'){ clearInterval(iv); iv=setInterval(step,PACE); }
       };
       w.appendChild(b);
     });
@@ -645,49 +656,93 @@ function counter(title, start, onDone){
     b.classList.toggle('on', VOICE);
     b.textContent = VOICE ? '숫자 읽어줌' : '숫자 안 읽음';
   }
-  function goalOf(){ return parseInt(el.querySelector('#_g').value,10)||0; }
-  function draw(){ nEl.textContent = n; }
+
   function step(){
     var g=goalOf();
-    n++;
-    nEl.textContent=n;
+    n++; nEl.textContent=n;
     var ci=cycleInfo(n,g);
     var mark = ci.first && ci.last;
-    wEl.textContent = (mark?'마지막 · ':'')+ci.w;
+    wEl.textContent=(mark?'마지막 · ':'')+ci.w;
     wEl.style.color = ci.last ? 'var(--body)' : 'var(--text)';
     if(VOICE) say((mark?'마지막, ':'')+ci.w);
-    if(g && n>=g){
-      stop();
-      tone(1250,.3,.45); setTimeout(function(){ tone(1250,.35,.45); },300);
-      vib([200,110,260]); hEl.textContent='목표 '+g+'회 완료';
-      if(VOICE) setTimeout(function(){ say('끝'); },800);
+    if(g && n>=g){ finishSet(g); return; }
+    tone(mark?1150:880,.09,.32); vib(mark?[60,50,60]:22);
+  }
+
+  function finishSet(g){
+    stopTick();
+    tone(1250,.3,.45); setTimeout(function(){ tone(1250,.35,.45); },300);
+    vib([220,110,260]);
+    wEl.textContent='그만'; wEl.style.color='var(--body)';
+    if(VOICE) setTimeout(function(){ say('그만'); },700);
+    if(opts.onSet) opts.onSet(n, setNo);
+    if(setNo>=SETS){
+      hEl.textContent = SETS>1 ? ('전체 '+SETS+'세트 완료') : ('목표 '+g+'회 완료');
+      sEl.textContent='시작';
+      if(opts.onAll) setTimeout(function(){ close(); opts.onAll(); },2000);
       return;
     }
-    tone(mark?1150:880, .09, .32); vib(mark?[60,50,60]:22);
+    if(!restSec){ nextSet(); return; }
+    restPhase();
   }
-  function tick(){ step(); }
+
+  function restPhase(){
+    phase='rest'; lastBeep=0;
+    var end=Date.now()+restSec*1000;
+    sEl.textContent='휴식 건너뛰기';
+    hEl.textContent=setNo+'세트 끝 · 휴식 '+restSec+'초';
+    wEl.textContent='휴식'; wEl.style.color='var(--muted)';
+    if(iv) clearInterval(iv);
+    iv=setInterval(function(){
+      var left=Math.ceil((end-Date.now())/1000);
+      if(left<=0){ clearInterval(iv); iv=null; nextSet(); return; }
+      nEl.textContent=left;
+      if(left<=3 && left!==lastBeep){ lastBeep=left; tone(700,.08,.3); vib(30); }
+    },200);
+    nEl.textContent=restSec;
+  }
+
+  function nextSet(){
+    if(iv){ clearInterval(iv); iv=null; }
+    setNo++; n=0; phase='count';
+    nEl.textContent=0; wEl.innerHTML='&nbsp;'; wEl.style.color='var(--text)';
+    hEl.textContent=setLine()+'곧 시작합니다';
+    tone(1100,.16,.42); vib([90,60,90]);
+    if(VOICE) say('다시 시작');
+    setTimeout(function(){ run=false; go(); },1200);
+  }
+
   function go(){
     if(run) return;
     if(VOICE) primeSpeech();
-    run=true; tone(1100,.12,.35);
-    iv=setInterval(tick,PACE);
+    phase='count'; run=true;
+    tone(1100,.12,.35);
+    if(iv) clearInterval(iv);
+    iv=setInterval(step,PACE);
     sEl.textContent='정지';
-    hEl.textContent = goalOf() ? (PACE/1000)+'초마다 · '+goalOf()+'회에서 멈춥니다'
-                                : (PACE/1000)+'초마다 · 하나부터 열까지 반복';
+    hEl.textContent = setLine() + (goalOf() ? ((PACE/1000)+'초마다 · '+goalOf()+'회에서 멈춤')
+                                            : ((PACE/1000)+'초마다 · 하나부터 열까지'));
     try{ if(navigator.wakeLock) navigator.wakeLock.request('screen').then(function(x){ wl=x; }).catch(function(){}); }catch(e){}
   }
-  function stop(){
-    run=false; if(iv) clearInterval(iv); iv=null;
-    sEl.textContent='시작'; hEl.textContent='화면을 눌러 직접 셀 수도 있습니다';
+  function stopTick(){
+    run=false; if(iv){ clearInterval(iv); iv=null; }
+    sEl.textContent='시작';
     try{ if(window.speechSynthesis) speechSynthesis.cancel(); }catch(e){}
+  }
+  function stop(){
+    stopTick(); phase='count';
+    hEl.textContent=setLine()+'화면을 눌러 직접 셀 수도 있습니다';
     try{ if(wl){ wl.release(); wl=null; } }catch(e){}
   }
   function close(){ stop(); el.remove(); }
 
-  el.querySelector('#_tap').onclick=function(){ if(!run) step(); };
-  sEl.onclick=function(){ if(run) stop(); else go(); };
+  el.querySelector('#_tap').onclick=function(){ if(!run && phase==='count') step(); };
+  sEl.onclick=function(){
+    if(phase==='rest'){ if(iv){ clearInterval(iv); iv=null; } nextSet(); return; }
+    if(run) stop(); else go();
+  };
   el.querySelector('#_z').onclick=function(){ n=0; draw(); wEl.innerHTML='&nbsp;'; };
-  el.querySelector('#_g').oninput=function(){ if(!run){ n=0; draw(); wEl.innerHTML='&nbsp;'; } };
+  el.querySelector('#_g').oninput=function(){ if(!run && phase==='count'){ n=0; draw(); wEl.innerHTML='&nbsp;'; } };
   el.querySelector('#_v').onclick=function(){
     VOICE=!VOICE; try{ localStorage.setItem('undong_voice', VOICE?'1':'0'); }catch(e){}
     drawVoice();
@@ -698,9 +753,15 @@ function counter(title, start, onDone){
     }
   };
   el.querySelector('#_x').onclick=close;
-  el.querySelector('#_ok').onclick=function(){ stop(); el.remove(); if(onDone) onDone(n); };
+  el.querySelector('#_ok').onclick=function(){
+    stopTick();
+    if(n>0 && phase==='count' && opts.onSet) opts.onSet(n, setNo);
+    close();
+    if(opts.onDone) opts.onDone(n);
+  };
 
   drawPace(); drawVoice(); draw();
+  if(SETS>1) hEl.textContent=setLine()+'시작을 누르세요';
 }
 
 /* ══ 전체화면 스톱워치 ══ */
@@ -867,7 +928,7 @@ function guide(name){
   var vurl=null;
   var sh = sheet(name, html, function(){}, '닫기', '');
   sh.querySelector('#_c').style.display='none';
-  sh.querySelector('#gCnt').onclick=function(){ counter(name, 0, null); };
+  sh.querySelector('#gCnt').onclick=function(){ counter(name, {}); };
   sh.querySelector('#gSw').onclick=function(){ stopwatch(name, null); };
   if(MODE==='mid'){
     var box=sh.querySelector('#vBox');
@@ -1005,7 +1066,7 @@ function addSet(n){
     '<input type="number" inputmode="decimal" id="sKg" value="'+(last?last.kg:'')+'"></div>'+
     '<div class="grow"><div class="small muted" style="margin-bottom:5px">목표 세트</div>'+
     '<input type="number" inputmode="numeric" id="sGoal" value="'+setGoal(n)+'"></div></div>'+
-    '<button class="btn ghost" id="sCnt" style="margin-top:10px">횟수 세기</button>'+
+    '<button class="btn ghost" id="sCnt" style="margin-top:10px">횟수 세기 (세트까지 이어서)</button>'+
     '<div class="row" style="margin-top:8px">'+
     '<button class="btn ghost" id="sDesc">운동 설명</button>'+
     '<button class="btn ghost" id="sMan">횟수 직접 입력</button></div>',
@@ -1021,10 +1082,26 @@ function addSet(n){
       else toast(left>0? left+'세트 남았습니다' : '기록했습니다');
     },'세트 추가');
   function showReps(){
-    sh.querySelector('#sCnt').textContent = reps ? ('횟수 '+reps+'회 — 다시 세기') : '횟수 세기';
+    var b=sh.querySelector('#sCnt'); if(!b) return;
+    b.textContent = reps ? ('마지막 '+reps+'회 기록됨 — 다시 세기') : '횟수 세기 (세트까지 이어서)';
   }
   sh.querySelector('#sCnt').onclick=function(){
-    counter(n+' 횟수', 0, function(v){ if(v>0){ reps=v; showReps(); } });
+    var kg=parseFloat($('#sKg').value);
+    if(isNaN(kg)){ toast('먼저 중량을 넣어주세요'); return false; }
+    var gl=parseInt($('#sGoal').value,10); if(isNaN(gl)||gl<1) gl=setGoal(n);
+    o.g[n]=gl;
+    var left=Math.max(1, gl-sets.length);
+    counter(n, {
+      goal: (last?last.rep:0),
+      sets: left,
+      rest: REST||60,
+      onSet: function(v){
+        if(v<=0) return;
+        o.w[n]=sets; sets.push({kg:kg, rep:v}); save(); renderWeight();
+        reps=v; showReps();
+      },
+      onAll: function(){ sh.remove(); toast('목표 '+gl+'세트 완료'); }
+    });
   };
   sh.querySelector('#sMan').onclick=function(){
     sheet('횟수 직접 입력',
@@ -1669,7 +1746,7 @@ function applyTheme(t){
   if(m) m.setAttribute('content', col);
   drawThemeRow();
 }
-var RESTS=[0,60,90,120,180];
+var RESTS=[0,30,45,60,75,90];
 function drawRestBtn(){
   $('#restBtn').textContent = '세트 사이 휴식 타이머 : ' + (REST? REST+'초' : '사용 안 함');
 }
