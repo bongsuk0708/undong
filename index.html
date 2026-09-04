@@ -360,7 +360,7 @@ function askConfig(){
       location.reload(); return true;
     }, '연결하기', '나중에');
 }
-var APP_VER='v9';
+var APP_VER='v10';
 function renderSync(){
   $('#sync').innerHTML = (fb ? (online? 'Firebase 연결됨 · 자동 저장 중' : '오프라인 · 폰에 저장 중, 연결되면 동기화')
     : '<span style="cursor:pointer;text-decoration:underline">Firebase 미연결 — 연결 설정하기</span>')
@@ -464,6 +464,15 @@ function tone(freq,dur,vol){
   }catch(e){}
 }
 function vib(v){ try{ if(navigator.vibrate) navigator.vibrate(v); }catch(e){} }
+var NUMK=['하나','둘','셋','넷','다섯','여섯','일곱','여덟','아홉','열'];
+function cycleInfo(n,goal){
+  if(goal && n>goal-10 && n<=goal){
+    var i=n-(goal-10);
+    return { w:NUMK[i-1], last:true, first:i===1 };
+  }
+  var j=((n-1)%10)+1;
+  return { w:NUMK[j-1], last:false, first:j===1 };
+}
 function say(n){
   try{
     if(!window.speechSynthesis) return;
@@ -480,6 +489,7 @@ function counter(title, start, onDone){
   el.innerHTML=
     '<div class="ovtop"><div class="ttl">'+esc(title)+'</div><button id="_x">닫기</button></div>'+
     '<div class="ovtap" id="_tap"><div class="bignum num" id="_n">'+n+'</div>'+
+    '<div id="_w" style="font-size:28px;font-weight:700;margin-top:2px;min-height:36px">&nbsp;</div>'+
     '<div class="ovhint" id="_h">시작을 누르면 자동으로 셉니다</div></div>'+
     '<div class="small muted" style="margin-bottom:6px">세는 간격</div>'+
     '<div class="chips" id="_pace"></div>'+
@@ -492,7 +502,8 @@ function counter(title, start, onDone){
     '<button class="btn ghost" id="_ok">완료</button></div>';
   document.body.appendChild(el);
 
-  var nEl=el.querySelector('#_n'), hEl=el.querySelector('#_h'), sEl=el.querySelector('#_s');
+  var nEl=el.querySelector('#_n'), hEl=el.querySelector('#_h'), sEl=el.querySelector('#_s'),
+      wEl=el.querySelector('#_w');
 
   function drawPace(){
     var w=el.querySelector('#_pace'); w.innerHTML='';
@@ -513,24 +524,29 @@ function counter(title, start, onDone){
     b.classList.toggle('on', VOICE);
     b.textContent = VOICE ? '숫자 읽어줌' : '숫자 안 읽음';
   }
-  function tick(){
+  function step(){
     n++; nEl.textContent=n;
     var goal=parseInt(el.querySelector('#_g').value,10)||0;
+    var ci=cycleInfo(n,goal);
+    wEl.textContent=(ci.last?'마지막 · ':'')+ci.w;
+    wEl.style.color = ci.last ? 'var(--body)' : 'var(--text)';
     if(goal && n>=goal){
       stop();
-      tone(1250,.3,.45); setTimeout(function(){ tone(1250,.35,.45); },260);
+      tone(1250,.3,.45); setTimeout(function(){ tone(1250,.35,.45); },280);
       vib([200,110,260]); hEl.textContent='목표 '+goal+'회 완료';
-      if(VOICE) setTimeout(function(){ say('완료'); },700);
+      if(VOICE){ say(ci.w); setTimeout(function(){ say('끝'); },900); }
       return;
     }
-    tone(880,.09,.32); vib(22);
-    if(VOICE) say(n);
+    tone(ci.first&&ci.last?1150:880, .09, .32); vib(ci.first&&ci.last?[60,50,60]:22);
+    if(VOICE) say((ci.first&&ci.last?'마지막, ':'')+ci.w);
   }
+  function tick(){ step(); }
   function go(){
     if(run) return;
     run=true; tone(1100,.12,.35);
     iv=setInterval(tick,PACE);
-    sEl.textContent='정지'; hEl.textContent=(PACE/1000)+'초마다 셉니다';
+    sEl.textContent='정지';
+    hEl.textContent=(PACE/1000)+'초마다 · 하나부터 열까지 반복';
     try{ if(navigator.wakeLock) navigator.wakeLock.request('screen').then(function(x){ wl=x; }).catch(function(){}); }catch(e){}
   }
   function stop(){
@@ -541,12 +557,9 @@ function counter(title, start, onDone){
   }
   function close(){ stop(); el.remove(); }
 
-  el.querySelector('#_tap').onclick=function(){
-    if(run) return;
-    n++; nEl.textContent=n; tone(880,.07,.25); vib(18); if(VOICE) say(n);
-  };
+  el.querySelector('#_tap').onclick=function(){ if(!run) step(); };
   sEl.onclick=function(){ if(run) stop(); else go(); };
-  el.querySelector('#_z').onclick=function(){ n=0; nEl.textContent=0; };
+  el.querySelector('#_z').onclick=function(){ n=0; nEl.textContent=0; wEl.innerHTML='&nbsp;'; };
   el.querySelector('#_v').onclick=function(){
     VOICE=!VOICE; try{ localStorage.setItem('undong_voice', VOICE?'1':'0'); }catch(e){}
     drawVoice();
