@@ -454,7 +454,7 @@ function askConfig(){
       location.reload(); return true;
     }, '연결하기', '나중에');
 }
-var APP_VER='v28';
+var APP_VER='v29';
 function renderSync(){
   $('#sync').innerHTML = (fb ? (online? 'Firebase 연결됨 · 자동 저장 중' : '오프라인 · 폰에 저장 중, 연결되면 동기화')
     : '<span style="cursor:pointer;text-decoration:underline">Firebase 미연결 — 연결 설정하기</span>')
@@ -925,6 +925,8 @@ function vidDel(name,cb){
 /* ══ 근육 부위 그림 ══ */
 var MUSCLE={
  '벤치프레스':[['chest'],['tricep','delt']],
+ '덤벨프레스':[['chest'],['tricep','delt']],
+ '덤벨플라이':[['chest'],['delt']],
  '인클라인 벤치프레스':[['chestU','delt'],['tricep','chestL']],
  '랫풀다운':[['lat'],['bicep','trap']],
  '턱걸이':[['lat'],['bicep','trap']],
@@ -1093,8 +1095,202 @@ function bodyMap(name){
     '<div class="small muted" style="margin-top:4px">진한 색이 주로 쓰는 부위입니다</div></div>';
 }
 
+var PZ=(function(){
+  var S='#9A9488', M='#C2BCB0', H='#E4E0D6', F='#7C766B';
+  var EQD='#55514A', EQM='#6E6A62', EQL='#8E8A80', EQS='#57544E';
+  var RD='#DD5142', RD2='#C7412F', RDL='#8E2C22', GY='#B7B0A3', GYL='#8B8478';
+  function ln(x1,y1,x2,y2,w,c){ return '<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="'+c+'" stroke-width="'+w+'" stroke-linecap="round"/>'; }
+  function lm(x1,y1,x2,y2,w){
+    return ln(x1,y1,x2,y2,w,S)+ln(x1-2,y1-4,x2-2,y2-4,Math.max(8,w-10),M)+ln(x1-3,y1-8,x2-3,y2-8,Math.max(5,w-26),H);
+  }
+  function fr(x1,y1,x2,y2,w){ return ln(x1,y1,x2,y2,w,F); }
+  function head(cx,cy,r){
+    return '<circle cx="'+cx+'" cy="'+cy+'" r="'+r+'" fill="'+S+'"/>'+
+           '<circle cx="'+(cx-2)+'" cy="'+(cy-4)+'" r="'+(r-4)+'" fill="'+M+'"/>'+
+           '<circle cx="'+(cx-6)+'" cy="'+(cy-9)+'" r="'+Math.max(4,r-13)+'" fill="'+H+'"/>';
+  }
+  function bar(x1,y1,x2,y2){ return ln(x1,y1,x2,y2,12,EQD)+ln(x1-2,y1-3,x2-2,y2-3,6,EQM); }
+  function plate(cx,cy,rot,rx,ry){
+    rx=rx||31; ry=ry||16;
+    return '<ellipse cx="'+cx+'" cy="'+cy+'" rx="'+rx+'" ry="'+ry+'" transform="rotate('+rot+','+cx+','+cy+')" fill="'+EQD+'"/>'+
+           '<ellipse cx="'+(cx-2)+'" cy="'+(cy-4)+'" rx="'+(rx-6)+'" ry="'+(ry-4)+'" transform="rotate('+rot+','+cx+','+cy+')" fill="'+EQM+'"/>';
+  }
+  function dumb(cx,cy,rot){
+    return '<g transform="rotate('+rot+','+cx+','+cy+')">'+
+      ln(cx-14,cy,cx+14,cy,7,EQD)+
+      '<rect x="'+(cx-26)+'" y="'+(cy-11)+'" width="12" height="22" rx="4" fill="'+EQD+'"/>'+
+      '<rect x="'+(cx-24)+'" y="'+(cy-9)+'" width="7" height="15" rx="3" fill="'+EQM+'"/>'+
+      '<rect x="'+(cx+14)+'" y="'+(cy-11)+'" width="12" height="22" rx="4" fill="'+EQD+'"/>'+
+      '<rect x="'+(cx+16)+'" y="'+(cy-9)+'" width="7" height="15" rx="3" fill="'+EQM+'"/></g>';
+  }
+  // 가슴 + 복근 (mode: all / upper / lower)
+  function torsoMus(tx,ty,rot,mode){
+    var upN = (mode==='all'||mode==='upper')? RD : GY;
+    var loN = (mode==='all'||mode==='lower')? RD : GY;
+    var upF = (mode==='all'||mode==='upper')? RD2 : GY;
+    var loF = (mode==='all'||mode==='lower')? RD2 : GY;
+    function pec(sy,cu,cl){
+      var s=sy, g='';
+      g+='<path d="M6 '+(4*s)+' L38 '+(6*s)+' C44 '+(10*s)+' 44 '+(15*s)+' 39 '+(16*s)+' L8 '+(14*s)+' C3 '+(12*s)+' 2 '+(7*s)+' 6 '+(4*s)+' Z" fill="'+cu+'"/>';
+      g+='<path d="M8 '+(15*s)+' L39 '+(17*s)+' C45 '+(20*s)+' 44 '+(26*s)+' 37 '+(27*s)+' L9 '+(24*s)+' C3 '+(22*s)+' 3 '+(18*s)+' 8 '+(15*s)+' Z" fill="'+cl+'"/>';
+      g+='<path d="M6 '+(4*s)+' L38 '+(6*s)+' C45 '+(11*s)+' 45 '+(22*s)+' 37 '+(27*s)+' L9 '+(24*s)+' C2 '+(20*s)+' 1 '+(9*s)+' 6 '+(4*s)+' Z" fill="none" stroke="'+RDL+'" stroke-width="1.7" stroke-linejoin="round"/>';
+      g+='<path d="M12 '+(9*s)+' C23 '+(9*s)+' 31 '+(10*s)+' 38 '+(12*s)+'" fill="none" stroke="'+RDL+'" stroke-width="0.9" opacity=".6"/>';
+      g+='<path d="M12 '+(20*s)+' C23 '+(20*s)+' 31 '+(21*s)+' 38 '+(23*s)+'" fill="none" stroke="'+RDL+'" stroke-width="0.9" opacity=".6"/>';
+      return g;
+    }
+    var g='<g transform="translate('+tx+','+ty+') rotate('+rot+')">';
+    g+=pec(1,upN,loN)+pec(-1,upF,loF);
+    g+='<path d="M2 0 L-42 0" fill="none" stroke="'+GYL+'" stroke-width="1.6"/>';
+    [-8,-19,-30].forEach(function(x,i){ var hh=16-i*1.5;
+      g+='<path d="M'+x+' -'+hh+' L'+x+' '+hh+'" fill="none" stroke="'+GYL+'" stroke-width="1.4"/>'; });
+    g+='<path d="M-42 -17 C-24 -20 -6 -22 4 -24" fill="none" stroke="'+GYL+'" stroke-width="1.2" opacity=".7"/>';
+    g+='<path d="M-42 17 C-24 20 -6 22 4 24" fill="none" stroke="'+GYL+'" stroke-width="1.2" opacity=".7"/>';
+    return g+'</g>';
+  }
+  function benchTop(x1,y1,x2,y2,w){ // 상판 (기울기 자유)
+    var dx=x2-x1, dy=y2-y1, L=Math.sqrt(dx*dx+dy*dy), nx=-dy/L*w, ny=dx/L*w;
+    var p=[[x1-nx,y1-ny],[x2-nx,y2-ny],[x2+nx,y2+ny],[x1+nx,y1+ny]];
+    var pts=p.map(function(q){return q[0].toFixed(1)+','+q[1].toFixed(1);}).join(' ');
+    var pts2=[p[3],p[2],[p[2][0],p[2][1]+14],[p[3][0],p[3][1]+14]].map(function(q){return q[0].toFixed(1)+','+q[1].toFixed(1);}).join(' ');
+    return '<polygon points="'+pts+'" fill="'+EQL+'"/><polygon points="'+pts2+'" fill="'+EQS+'"/>';
+  }
+  function leg(x,y,h){ return '<polygon points="'+x+','+y+' '+(x+8)+','+(y+h)+' '+(x+20)+','+(y+h)+' '+(x+14)+','+y+'" fill="'+EQD+'"/>'; }
+  function arrow(x1,y1,x2,y2,label,lx,ly){
+    return '<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="#D85A30" stroke-width="3" marker-end="url(#arrow)"/>'+
+      (label?'<text x="'+lx+'" y="'+ly+'" font-size="13" fill="#993C1D" text-anchor="start">'+label+'</text>':'');
+  }
+  return {ln:ln,lm:lm,fr:fr,head:head,bar:bar,plate:plate,dumb:dumb,torsoMus:torsoMus,
+          benchTop:benchTop,leg:leg,arrow:arrow};
+})();
+
+var POSE={};
+
+// 공통: 벤치에 누운 몸통 (각도 조절)
+function lying(cfg){
+  var g='';
+  var hip=cfg.hip, sh=cfg.sh, hd=cfg.hd, rot=cfg.rot;
+  g+=PZ.fr(hip[0]-12,hip[1]+10,cfg.kn[0]-6,cfg.kn[1]+12,30);
+  g+=PZ.lm(hip[0],hip[1],cfg.kn[0],cfg.kn[1],36);
+  g+=PZ.lm(cfg.kn[0],cfg.kn[1],cfg.ft[0],cfg.ft[1],28);
+  g+=PZ.lm(hip[0],hip[1],sh[0],sh[1],56);
+  return g;
+}
+function neckHead(sh,hd){
+  return PZ.lm(sh[0]+6,sh[1]-4,hd[0]-12,hd[1]+4,26)+PZ.head(hd[0],hd[1],21);
+}
+
+/* 1. 벤치프레스 — 평벤치, 바벨 */
+POSE['벤치프레스']=function(){
+  var g='';
+  g+=PZ.leg(96,248,38)+PZ.leg(250,146,38);
+  g+=PZ.benchTop(80,244,264,124,22);
+  g+=PZ.fr(196,132,176,86,26)+PZ.fr(176,86,162,46,22);
+  g+=lying({hip:[152,206],kn:[112,238],ft:[88,272],sh:[228,154],hd:[258,134]});
+  g+=PZ.torsoMus(190,180,-34,'all');
+  g+=neckHead([228,154],[258,134]);
+  g+=PZ.lm(243,176,227,133,32)+PZ.lm(227,133,213,95,27);
+  g+=PZ.bar(232,122,158,14)+PZ.plate(236,130,-34)+PZ.plate(154,20,-34);
+  g+=PZ.arrow(316,150,286,106,'밀기',322,166);
+  return g;
+};
+
+/* 2. 인클라인 벤치프레스 — 등받이를 세운 벤치 */
+POSE['인클라인 벤치프레스']=function(){
+  var g='';
+  g+=PZ.leg(100,250,36)+PZ.leg(224,196,36);
+  g+=PZ.benchTop(96,250,244,178,22);
+  g+=PZ.benchTop(214,196,272,96,22);
+  g+=PZ.fr(200,142,182,96,26)+PZ.fr(182,96,168,58,22);
+  g+=PZ.fr(150,222,116,250,30);
+  g+=PZ.lm(160,214,120,244,36)+PZ.lm(120,244,96,276,28);
+  g+=PZ.lm(160,214,238,142,54);
+  g+=PZ.torsoMus(200,178,-43,'upper');
+  g+=neckHead([238,142],[262,118]);
+  g+=PZ.lm(248,164,232,124,32)+PZ.lm(232,124,218,88,27);
+  g+=PZ.bar(236,114,166,18)+PZ.plate(240,122,-37)+PZ.plate(162,22,-37);
+  g+=PZ.arrow(318,140,290,98,'밀기',324,156);
+  return g;
+};
+
+/* 3. 덤벨프레스 — 평벤치, 덤벨 두 개 */
+POSE['덤벨프레스']=function(){
+  var g='';
+  g+=PZ.leg(96,248,38)+PZ.leg(250,146,38);
+  g+=PZ.benchTop(80,244,264,124,22);
+  g+=PZ.fr(200,136,186,92,26)+PZ.fr(186,92,178,56,22);
+  g+=PZ.dumb(174,42,-34);
+  g+=lying({hip:[152,206],kn:[112,238],ft:[88,272],sh:[228,154],hd:[258,134]});
+  g+=PZ.torsoMus(190,180,-34,'all');
+  g+=neckHead([228,154],[258,134]);
+  g+=PZ.lm(243,176,231,132,32)+PZ.lm(231,132,222,92,27);
+  g+=PZ.dumb(218,78,-34);
+  g+=PZ.arrow(316,150,286,106,'밀기',322,166);
+  return g;
+};
+
+/* 4. 덤벨플라이 — 팔을 옆으로 벌렸다 모으기 */
+POSE['덤벨플라이']=function(){
+  var g='';
+  g+=PZ.leg(96,248,38)+PZ.leg(250,146,38);
+  g+=PZ.benchTop(80,244,264,124,22);
+  g+=PZ.fr(198,134,158,116,26)+PZ.fr(158,116,120,104,22);
+  g+=PZ.dumb(104,98,-14);
+  g+=lying({hip:[152,206],kn:[112,238],ft:[88,272],sh:[228,154],hd:[258,134]});
+  g+=PZ.torsoMus(190,180,-34,'all');
+  g+=neckHead([228,154],[258,134]);
+  g+=PZ.lm(243,176,278,146,32)+PZ.lm(278,146,312,126,27);
+  g+=PZ.dumb(326,118,-24);
+  g+=PZ.arrow(120,74,196,42,'모으기',198,36);
+  return g;
+};
+
+/* 5. 딥스 — 평행봉, 몸을 앞으로 기울여 내려갔다 밀기 */
+POSE['딥스']=function(){
+  var g='';
+  g+='<rect x="52" y="132" width="14" height="140" rx="4" fill="#55514A"/>';
+  g+='<rect x="286" y="112" width="14" height="140" rx="4" fill="#55514A"/>';
+  g+=PZ.bar(58,138,120,126)+PZ.bar(240,118,296,108);
+  g+=PZ.fr(178,138,206,182,26)+PZ.fr(206,182,214,226,22);
+  g+=PZ.lm(160,120,146,88,30)+PZ.lm(146,88,120,66,26);
+  g+=PZ.lm(160,120,190,176,52);
+  g+=PZ.torsoMus(176,150,62,'lower');
+  g+=neckHead([160,120],[142,96]);
+  g+=PZ.lm(196,180,178,222,34)+PZ.lm(178,222,190,262,28);
+  g+=PZ.lm(206,132,236,104,30)+PZ.lm(236,104,264,88,26);
+  g+=PZ.arrow(330,196,330,138,'밀기',336,176);
+  return g;
+};
+
+/* 6. 팔굽혀펴기 — 바닥, 몸통 일직선 */
+POSE['팔굽혀펴기']=function(){
+  var g='';
+  g+='<rect x="30" y="252" width="320" height="9" rx="4" fill="#8E8A80"/>';
+  g+=PZ.fr(212,180,238,236,26)+PZ.fr(160,196,152,244,26);
+  g+=PZ.lm(84,236,148,208,34)+PZ.lm(148,208,206,180,34);
+  g+=PZ.lm(206,180,262,158,52);
+  g+=PZ.torsoMus(240,166,-22,'all');
+  g+=neckHead([262,158],[292,142]);
+  g+=PZ.lm(66,248,60,250,20);
+  g+=PZ.lm(250,170,262,212,32)+PZ.lm(262,212,258,246,27);
+  g+=PZ.arrow(330,214,330,158,'밀기',336,192);
+  return g;
+};
+
+
+function poseBox(name){
+  var p=POSE[name];
+  if(!p) return '';
+  return '<div class="card" style="padding:8px 4px 4px">'+
+    '<svg viewBox="0 0 380 300" style="width:100%;height:auto;display:block">'+
+    '<defs><marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">'+
+    '<path d="M2 1L8 5L2 9" fill="none" stroke="context-stroke" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>'+
+    '</marker></defs>'+p()+'</svg></div>';
+}
+
 /* ══ 자세 가이드 ══ */
 var TIPS = {
+ '덤벨프레스':['팔꿈치가 어깨선보다 아래로 오게','가슴이 늘어나는 지점까지만 내린다','맨 위에서 덤벨을 부딪치지 않는다'],
+ '덤벨플라이':['팔꿈치를 살짝 굽힌 각도로 고정','가슴이 당기는 느낌까지만 벌린다','모을 때 가슴으로 조여준다'],
  '데드리프트':['바를 정강이에 닿을 만큼 붙이고 시작','허리를 말지 말고 가슴을 편 채로 든다','엉덩이와 어깨가 같은 속도로 올라오게'],
  '인클라인 벤치프레스':['등받이는 30~45도가 적당','바는 쇄골 바로 아래로 내린다','어깨가 앞으로 말리지 않게 견갑골 고정'],
  '턱걸이':['어깨를 먼저 아래로 내리고 당기기 시작','반동으로 차올리지 않는다','턱이 봉 위로 올라올 때까지'],
@@ -1122,8 +1318,10 @@ var TIPS = {
  '자전거':['안장 높이는 페달이 가장 낮을 때 무릎이 살짝 굽는 정도','무릎이 안팎으로 벌어지지 않게','손목과 어깨에 체중을 싣지 않는다'],
  '등산':['보폭을 줄이고 발바닥 전체로 딛는다','내려올 때 무릎이 상하므로 더 천천히','스틱을 쓰면 무릎 부담이 크게 준다']
 };
-var MIDEX=['데드리프트','인클라인 벤치프레스','턱걸이','딥스','바벨컬','사이드 레터럴 레이즈','루마니안 데드리프트','힙 쓰러스트'];
+var MIDEX=['데드리프트','인클라인 벤치프레스','덤벨프레스','덤벨플라이','턱걸이','딥스','바벨컬','사이드 레터럴 레이즈','루마니안 데드리프트','힙 쓰러스트'];
 var DESC = {
+ '덤벨프레스':['가슴 · 삼두 · 어깨앞','바벨보다 팔을 더 넓게 벌리고 깊게 내릴 수 있어 가슴이 잘 늘어납니다. 좌우 힘 차이를 잡는 데도 좋습니다.','8~12회 3세트'],
+ '덤벨플라이':['가슴','미는 운동이 아니라 팔을 벌렸다 모으는 운동입니다. 가슴 바깥쪽을 늘렸다 조이는 느낌으로 하세요. 무게를 욕심내면 어깨를 다칩니다.','12~15회 3세트'],
  '데드리프트':['등 전체 · 엉덩이 · 허벅지 뒤','몸에서 가장 무거운 무게를 다루는 운동입니다. 등과 하체 뒷면 전체를 한 번에 씁니다. 다만 허리를 곧게 유지하지 못하면 크게 다칠 수 있으니 가벼운 무게로 자세부터 잡으세요.','5~8회 3세트'],
  '인클라인 벤치프레스':['가슴 위쪽 · 어깨앞','벤치를 비스듬히 세워서 하는 벤치프레스입니다. 평평하게 누워서 하면 잘 안 차는 윗가슴을 채웁니다.','8~12회 3세트'],
  '턱걸이':['등 · 이두','상체 당기는 힘을 보는 가장 확실한 지표입니다. 한 개도 안 되면 랫풀다운으로 힘을 먼저 기르세요.','최대 반복 3~5세트'],
@@ -1164,6 +1362,7 @@ function tipsFor(name){
 }
 function guide(name){
   var t = tipsFor(name), html='', dc=descFor(name);
+  html += poseBox(name);
   html += bodyMap(name);
   if(dc){
     html += '<div class="small" style="margin:-4px 0 10px"><span class="badge" style="margin:0">'+esc(dc[0])+'</span>'+
