@@ -454,7 +454,7 @@ function askConfig(){
       location.reload(); return true;
     }, '연결하기', '나중에');
 }
-var APP_VER='v27';
+var APP_VER='v28';
 function renderSync(){
   $('#sync').innerHTML = (fb ? (online? 'Firebase 연결됨 · 자동 저장 중' : '오프라인 · 폰에 저장 중, 연결되면 동기화')
     : '<span style="cursor:pointer;text-decoration:underline">Firebase 미연결 — 연결 설정하기</span>')
@@ -966,89 +966,129 @@ function bodyMap(name){
   var P={}, S={};
   m[0].forEach(function(x){ P[x]=1; });
   m[1].forEach(function(x){ if(!P[x]) S[x]=1; });
-  var LN=';stroke:var(--line);stroke-width:.9;stroke-linejoin:round';
-  function st(k){
-    if(P[k]) return 'fill:var(--muscle);opacity:1'+LN;
-    if(S[k]) return 'fill:var(--muscle);opacity:.42'+LN;
-    return 'fill:var(--surface2)'+LN;
+  var LN=';stroke:var(--line);stroke-width:.7;stroke-linejoin:round';
+  function f(k){
+    if(P[k]) return 'fill:url(#gHot)'+LN;
+    if(S[k]) return 'fill:url(#gWarm)'+LN;
+    return 'fill:url(#gBase)'+LN;
   }
-  function stc(part){
-    if(P.chest||P['chest'+part]) return 'fill:var(--muscle);opacity:1'+LN;
-    if(S.chest||S['chest'+part]) return 'fill:var(--muscle);opacity:.42'+LN;
-    return 'fill:var(--surface2)'+LN;
+  function fc(part){
+    if(P.chest||P['chest'+part]) return 'fill:url(#gHot)'+LN;
+    if(S.chest||S['chest'+part]) return 'fill:url(#gWarm)'+LN;
+    return 'fill:url(#gBase)'+LN;
   }
-  var base='fill:var(--surface2)'+LN;
+  var base='fill:url(#gBase)'+LN;
+  var vein='fill:none;stroke:var(--line);stroke-width:.55;opacity:.8';
+  function P_(d,s){ return '<path d="'+d+'" style="'+s+'"/>'; }
+  function L(d){ return '<path d="'+d+'" style="'+vein+'"/>'; }
   function fig(x, back){
-    function P(d,style){ return '<path d="'+d+'" style="'+style+'"/>'; }
-    var g='<g transform="translate('+x+',10)">';
-
+    var g='<g transform="translate('+x+',6)">';
     // 머리 · 목
-    g+='<ellipse cx="48" cy="24" rx="10" ry="12.5" style="'+base+'"/>';
-    g+=P('M41 34 L55 34 L57 46 L39 46 Z', base);
-    // 몸통
-    g+=P('M33 47 L63 47 C72 49 78 58 76 70 L69 93 C67 105 63 113 60 120 L36 120 C33 113 29 105 27 93 L20 70 C18 58 24 49 33 47 Z', base);
-    // 골반 · 엉덩이
-    g+=P('M36 117 L60 117 C61 125 59 132 56 136 L40 136 C37 132 35 125 36 117 Z', back?st('glute'):base);
+    g+='<ellipse cx="60" cy="20" rx="11.5" ry="14.5" style="'+base+'"/>';
+    g+=P_('M51 30 L69 30 C71 38 74 44 78 49 L42 49 C46 44 49 38 51 30 Z', base);
+    if(!back){ g+=L('M53 33 C55 40 57 44 60 47'); g+=L('M67 33 C65 40 63 44 60 47'); }
 
-    // 팔 (내린 자세)
-    function arm(cx, ang){
-      var up = back? st('tricep') : st('bicep');
-      var s='<g transform="translate('+cx+',58) rotate('+ang+')">';
-      s+=P('M-7 2 C-11 10 -10 22 -6.5 31 L6.5 31 C10 22 11 10 7 2 Z', up);
-      s+=P('M-5.5 31 C-7.5 39 -6.5 49 -4 56 L4 56 C6.5 49 7.5 39 5.5 31 Z', st('forearm'));
-      s+='<circle cx="0" cy="60" r="4.4" style="'+base+'"/>';
+    // 몸통
+    g+=P_('M42 52 L78 52 C90 55 98 64 98 76 L94 102 C91 120 87 130 84 141 L36 141 C33 130 29 120 26 102 L22 76 C22 64 30 55 42 52 Z', base);
+    // 골반
+    g+=P_('M34 138 L86 138 C87 149 84 157 80 162 L40 162 C36 157 33 149 34 138 Z', back?f('glute'):base);
+
+    // 팔
+    function arm(cx,ang,mir){
+      var up = back? f('tricep') : f('bicep');
+      var s='<g transform="translate('+cx+',68) rotate('+ang+')">';
+      s+=P_('M-8 4 C-13.5 18 -12.5 36 -8.5 50 L8.5 50 C12.5 36 13.5 18 8 4 Z', up);
+      if(!back){ s+=L('M-2 12 C-5 22 -5 34 -3 44'); }
+      else { s+=L('M0 10 L0 44'); s+=L('M-4 24 C-2 30 2 30 4 24'); }
+      s+=P_('M-7.5 50 C-10 66 -8 82 -5 92 L5 92 C8 82 10 66 7.5 50 Z', f('forearm'));
+      s+=L('M-3 56 C-5 70 -4 82 -2 90');
+      s+=P_('M-5 92 C-7 99 -4.5 105 0 106 C4.5 105 7 99 5 92 Z', base);
       s+='</g>';
       return s;
     }
-    g+=arm(21,20)+arm(75,-20);
-    // 어깨 (세 갈래 느낌)
-    g+='<ellipse cx="21" cy="57" rx="10.5" ry="12.5" style="'+st('delt')+'"/>';
-    g+='<ellipse cx="75" cy="57" rx="10.5" ry="12.5" style="'+st('delt')+'"/>';
+    g+=arm(22,13)+arm(98,-13);
+    // 어깨 (앞·중·뒤 갈래)
+    g+='<ellipse cx="22" cy="68" rx="12" ry="15" style="'+f('delt')+'"/>';
+    g+='<ellipse cx="98" cy="68" rx="12" ry="15" style="'+f('delt')+'"/>';
+    g+=L('M13 62 C18 58 26 59 30 65');
+    g+=L('M107 62 C102 58 94 59 90 65');
+    g+=L('M12 74 C18 78 26 78 31 73');
+    g+=L('M108 74 C102 78 94 78 89 73');
 
     if(!back){
-      // 가슴 — 위쪽(쇄골부) / 아래쪽
-      g+=P('M31 52 C39 49 45 51 47 57 L47 61 L30 61 C27 58 28 54 31 52 Z', stc('U'));
-      g+=P('M65 52 C57 49 51 51 49 57 L49 61 L66 61 C69 58 68 54 65 52 Z', stc('U'));
-      g+=P('M30 62 L47 62 L47 70 C45 75 38 77 33 74 C29 71 28 66 30 62 Z', stc('L'));
-      g+=P('M66 62 L49 62 L49 70 C51 75 58 77 63 74 C67 71 68 66 66 62 Z', stc('L'));
-      // 복근 8분할 + 복사근
-      var ab=st('abs');
-      [78,87,96].forEach(function(yy){
-        g+='<rect x="40" y="'+yy+'" width="7.5" height="7.5" rx="2.4" style="'+ab+'"/>';
-        g+='<rect x="48.5" y="'+yy+'" width="7.5" height="7.5" rx="2.4" style="'+ab+'"/>';
+      // 가슴 (윗가슴 · 아랫가슴) + 결
+      g+=P_('M38 57 C50 53 57 56 59 64 L59 69 L34 69 C29 65 32 59 38 57 Z', fc('U'));
+      g+=P_('M82 57 C70 53 63 56 61 64 L61 69 L86 69 C91 65 88 59 82 57 Z', fc('U'));
+      g+=P_('M33 70 L59 70 L59 80 C57 88 46 91 38 87 C32 83 30 74 33 70 Z', fc('L'));
+      g+=P_('M87 70 L61 70 L61 80 C63 88 74 91 82 87 C88 83 90 74 87 70 Z', fc('L'));
+      [61,64.5,68].forEach(function(y){ g+=L('M37 '+y+' C45 '+(y-1.5)+' 52 '+(y-1)+' 58 '+y); g+=L('M83 '+y+' C75 '+(y-1.5)+' 68 '+(y-1)+' 62 '+y); });
+      [74,77.5].forEach(function(y){ g+=L('M35 '+y+' C43 '+(y+2)+' 51 '+(y+2)+' 58 '+(y-1)); g+=L('M85 '+y+' C77 '+(y+2)+' 69 '+(y+2)+' 62 '+(y-1)); });
+      // 복직근 8분할
+      var ab=f('abs');
+      [88,97.5,107,116.5].forEach(function(y){
+        g+='<rect x="49" y="'+y+'" width="10" height="8.2" rx="2.8" style="'+ab+'"/>';
+        g+='<rect x="61" y="'+y+'" width="10" height="8.2" rx="2.8" style="'+ab+'"/>';
       });
-      g+='<rect x="41.5" y="105" width="13" height="8" rx="3.5" style="'+ab+'"/>';
-      g+=P('M33 79 C31 90 33 102 38 110 L39 78 Z', ab);
-      g+=P('M63 79 C65 90 63 102 58 110 L57 78 Z', ab);
+      g+=P_('M51 126 L69 126 C69 134 65 139 60 140 C55 139 51 134 51 126 Z', ab);
+      // 복사근 · 전거근
+      g+=P_('M38 88 C34 104 38 122 46 134 L47.5 86 Z', ab);
+      g+=P_('M82 88 C86 104 82 122 74 134 L72.5 86 Z', ab);
+      [78,83,88].forEach(function(y){ g+=L('M34 '+y+' L42 '+(y-3)); g+=L('M86 '+y+' L78 '+(y-3)); });
     }else{
-      g+=P('M48 42 L64 51 L57 76 L39 76 L32 51 Z', st('trap'));
-      g+=P('M30 63 C23 73 26 92 35 102 L45 97 L44 67 Z', st('lat'));
-      g+=P('M66 63 C73 73 70 92 61 102 L51 97 L52 67 Z', st('lat'));
-      g+=P('M41 95 L55 95 C56 103 55 111 53 116 L43 116 C41 111 40 103 41 95 Z', st('lowback'));
+      // 승모 · 광배 · 척추기립근
+      g+=P_('M60 44 C70 48 79 53 86 59 C82 74 78 88 75 99 L45 99 C42 88 38 74 34 59 C41 53 50 48 60 44 Z', f('trap'));
+      g+=L('M60 46 L60 98');
+      g+=P_('M25 74 C17 92 22 120 35 133 L50 126 L47 80 Z', f('lat'));
+      g+=P_('M95 74 C103 92 98 120 85 133 L70 126 L73 80 Z', f('lat'));
+      [86,94,102,110].forEach(function(y){ g+=L('M27 '+y+' C34 '+(y+2)+' 42 '+(y+2)+' 48 '+(y-1)); g+=L('M93 '+y+' C86 '+(y+2)+' 78 '+(y+2)+' 72 '+(y-1)); });
+      g+=P_('M53 100 L67 100 C68 116 66 130 63 138 L57 138 C54 130 52 116 53 100 Z', f('lowback'));
+      // 둔근
+      g+='<ellipse cx="48" cy="148" rx="14" ry="11.5" style="'+f('glute')+'"/>';
+      g+='<ellipse cx="72" cy="148" rx="14" ry="11.5" style="'+f('glute')+'"/>';
     }
 
     // 허벅지
-    var th = back? st('ham') : st('quad');
-    g+=P('M34 134 C29 146 30 160 33 170 L45 170 C46 156 46 144 45 134 Z', th);
-    g+=P('M62 134 C67 146 66 160 63 170 L51 170 C50 156 50 144 51 134 Z', th);
+    var th = back? f('ham') : f('quad');
+    g+=P_('M36 160 C29 180 30 200 34 214 L58 214 C59 194 59 176 58 160 Z', th);
+    g+=P_('M84 160 C91 180 90 200 86 214 L62 214 C61 194 61 176 62 160 Z', th);
+    if(!back){
+      g+=L('M45 164 C42 180 42 198 44 212');
+      g+=L('M75 164 C78 180 78 198 76 212');
+      g+=P_('M49 192 C45 199 44 207 46 213 L58 213 L58 192 Z', th);
+      g+=P_('M71 192 C75 199 76 207 74 213 L62 213 L62 192 Z', th);
+    }else{
+      g+=L('M45 164 L43 212'); g+=L('M75 164 L77 212');
+    }
     // 무릎
-    g+='<ellipse cx="39" cy="173" rx="6" ry="4" style="'+base+'"/>';
-    g+='<ellipse cx="57" cy="173" rx="6" ry="4" style="'+base+'"/>';
+    g+='<ellipse cx="46" cy="218" rx="10" ry="6.5" style="'+base+'"/>';
+    g+='<ellipse cx="74" cy="218" rx="10" ry="6.5" style="'+base+'"/>';
     // 종아리
-    g+=P('M34 177 C30 187 31 199 34 207 L44 207 C45 195 45 185 44 177 Z', st('calf'));
-    g+=P('M62 177 C66 187 65 199 62 207 L52 207 C51 195 51 185 52 177 Z', st('calf'));
-    g+='<ellipse cx="39" cy="210" rx="5.5" ry="3.2" style="'+base+'"/>';
-    g+='<ellipse cx="57" cy="210" rx="5.5" ry="3.2" style="'+base+'"/>';
-
-    g+='<text x="48" y="226" style="fill:var(--muted)" font-size="11" text-anchor="middle">'+(back?'뒤':'앞')+'</text>';
+    g+=P_('M37 222 C31 238 32 258 36 272 L56 272 C57 254 57 238 56 222 Z', f('calf'));
+    g+=P_('M83 222 C89 238 88 258 84 272 L64 272 C63 254 63 238 64 222 Z', f('calf'));
+    g+=L('M46 224 C43 240 43 258 45 270');
+    g+=L('M74 224 C77 240 77 258 75 270');
+    g+='<ellipse cx="44" cy="277" rx="8.5" ry="4.8" style="'+base+'"/>';
+    g+='<ellipse cx="76" cy="277" rx="8.5" ry="4.8" style="'+base+'"/>';
+    g+='<text x="60" y="295" style="fill:var(--muted)" font-size="12" text-anchor="middle">'+(back?'뒤':'앞')+'</text>';
     g+='</g>';
     return g;
   }
+  var defs='<defs>'+
+   '<linearGradient id="gBase" x1="0" y1="0" x2="1" y2="1">'+
+     '<stop offset="0" style="stop-color:var(--surface2)"/>'+
+     '<stop offset="1" style="stop-color:var(--line)"/></linearGradient>'+
+   '<linearGradient id="gHot" x1="0" y1="0" x2="1" y2="1">'+
+     '<stop offset="0" style="stop-color:var(--muscle);stop-opacity:1"/>'+
+     '<stop offset="1" style="stop-color:var(--muscle);stop-opacity:.7"/></linearGradient>'+
+   '<linearGradient id="gWarm" x1="0" y1="0" x2="1" y2="1">'+
+     '<stop offset="0" style="stop-color:var(--muscle);stop-opacity:.5"/>'+
+     '<stop offset="1" style="stop-color:var(--muscle);stop-opacity:.32"/></linearGradient>'+
+   '</defs>';
   var tags=[];
   m[0].forEach(function(k){ if(MNAME[k]) tags.push('<span class="badge" style="margin:0 6px 0 0;color:var(--muscle)">'+MNAME[k]+'</span>'); });
   m[1].forEach(function(k){ if(MNAME[k]) tags.push('<span class="badge" style="margin:0 6px 0 0;color:var(--muscle);opacity:.55">'+MNAME[k]+'</span>'); });
-  return '<div class="card" style="padding:12px 10px 8px;text-align:center">'+
-    '<svg viewBox="0 0 202 242" style="width:100%;max-width:310px;height:auto">'+fig(2,false)+fig(104,true)+'</svg>'+
+  return '<div class="card" style="padding:12px 8px 8px;text-align:center">'+
+    '<svg viewBox="0 0 245 310" style="width:100%;max-width:330px;height:auto">'+defs+fig(0,false)+fig(125,true)+'</svg>'+
     '<div style="margin-top:6px;line-height:2">'+tags.join('')+'</div>'+
     '<div class="small muted" style="margin-top:4px">진한 색이 주로 쓰는 부위입니다</div></div>';
 }
