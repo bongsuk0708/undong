@@ -18,7 +18,7 @@
   --glass:rgba(245,246,248,.92);
   --shadow:0 1px 2px rgba(20,26,34,.04);
   --weight:#8c5a2b; --cardio:#2a6b5d; --diet:#5b4b8a; --home:#2e4e9e; --body:#a8423c;
-  --accent:var(--weight);
+  --muscle:#d93a2b; --accent:var(--weight);
 }
 /* 종이 */
 html[data-theme="paper"]{
@@ -28,6 +28,7 @@ html[data-theme="paper"]{
   --glass:rgba(244,239,230,.92);
   --shadow:0 1px 2px rgba(60,50,35,.05);
   --weight:#8a5a24; --cardio:#3f6b4a; --diet:#6b4a7a; --home:#3b5580; --body:#a8483c;
+  --muscle:#d93a2b;
 }
 /* 남색 */
 html[data-theme="slate"]{
@@ -37,6 +38,7 @@ html[data-theme="slate"]{
   --glass:rgba(238,241,246,.92);
   --shadow:0 1px 2px rgba(20,28,40,.05);
   --weight:#8a5a2a; --cardio:#276b70; --diet:#4f4a8f; --home:#2b4c96; --body:#a4423f;
+  --muscle:#d93a2b;
 }
 /* 한밤 */
 html[data-theme="midnight"]{
@@ -46,6 +48,7 @@ html[data-theme="midnight"]{
   --glass:rgba(15,20,32,.94);
   --shadow:none;
   --weight:#e5a866; --cardio:#5fc0ad; --diet:#b39bf0; --home:#8fabf7; --body:#e88079;
+  --muscle:#f2564a;
 }
 /* 어두운 화면 */
 html[data-theme="dark"]{
@@ -55,6 +58,7 @@ html[data-theme="dark"]{
   --glass:rgba(20,24,29,.94);
   --shadow:none;
   --weight:#f2a03d; --cardio:#4fb8a0; --diet:#c39bf0; --home:#7e9bf5; --body:#e0736e;
+  --muscle:#f2564a;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0;background:var(--bg);color:var(--text)}
@@ -186,9 +190,12 @@ h2:first-child{margin-top:2px}
 
 .sheet{position:fixed;inset:0;z-index:60;display:flex;align-items:flex-end;
   background:rgba(10,14,20,.42)}
+.sheet{overflow:hidden}
 .sheet>div{background:var(--surface);width:100%;max-width:620px;margin:0 auto;
   border-radius:18px 18px 0 0;padding:18px 16px calc(20px + env(safe-area-inset-bottom));
-  box-shadow:0 -6px 30px rgba(10,14,20,.16)}
+  box-shadow:0 -6px 30px rgba(10,14,20,.16);
+  max-height:92vh;max-height:92dvh;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  overscroll-behavior:contain}
 .sheet h3{margin:0 0 14px;font-size:17px}
 
 nav{position:fixed;bottom:0;left:0;right:0;z-index:30;display:flex;
@@ -447,7 +454,7 @@ function askConfig(){
       location.reload(); return true;
     }, '연결하기', '나중에');
 }
-var APP_VER='v24';
+var APP_VER='v25';
 function renderSync(){
   $('#sync').innerHTML = (fb ? (online? 'Firebase 연결됨 · 자동 저장 중' : '오프라인 · 폰에 저장 중, 연결되면 동기화')
     : '<span style="cursor:pointer;text-decoration:underline">Firebase 미연결 — 연결 설정하기</span>')
@@ -960,24 +967,27 @@ function bodyMap(name){
   m[0].forEach(function(x){ P[x]=1; });
   m[1].forEach(function(x){ if(!P[x]) S[x]=1; });
   function st(k){
-    if(P[k]) return 'fill:var(--accent);opacity:1';
-    if(S[k]) return 'fill:var(--accent);opacity:.38';
+    if(P[k]) return 'fill:var(--muscle);opacity:1';
+    if(S[k]) return 'fill:var(--muscle);opacity:.4';
     return 'fill:var(--surface2)';
   }
   var base='fill:var(--surface2)';
   function fig(x, back){
-    var g='';
+    var g='<g transform="translate(0,26)">';
+    function arm(px, ang){
+      var up = back? st('tricep') : st('bicep');
+      return '<g transform="rotate('+ang+','+px+',44)">'+
+        '<rect x="'+(px-5.5)+'" y="42" width="11" height="30" rx="5.5" style="'+up+'"/>'+
+        '<rect x="'+(px-5)+'" y="71" width="10" height="27" rx="5" style="'+st('forearm')+'"/>'+
+        '</g>';
+    }
     g+='<ellipse cx="'+(x+40)+'" cy="16" rx="9.5" ry="11.5" style="'+base+'"/>';
-    g+='<rect x="'+(x+35.5)+'" y="25" width="9" height="8" style="'+base+'"/>';
+    g+='<rect x="'+(x+35.5)+'" y="25" width="9" height="9" style="'+base+'"/>';
     g+='<path d="M'+(x+21)+' 44 Q'+(x+21)+' 36 '+(x+28)+' 35 L'+(x+52)+' 35 Q'+(x+59)+' 36 '+(x+59)+' 44 '+
        'L'+(x+56)+' 74 Q'+(x+55)+' 95 '+(x+50)+' 95 L'+(x+30)+' 95 Q'+(x+25)+' 95 '+(x+24)+' 74 Z" style="'+base+'"/>';
+    g+=arm(x+16, 162)+arm(x+64, -162);
     g+='<circle cx="'+(x+16)+'" cy="44" r="9.5" style="'+st('delt')+'"/>';
     g+='<circle cx="'+(x+64)+'" cy="44" r="9.5" style="'+st('delt')+'"/>';
-    var arm = back? st('tricep') : st('bicep');
-    g+='<rect x="'+(x+7)+'" y="51" width="11" height="29" rx="5.5" style="'+arm+'"/>';
-    g+='<rect x="'+(x+62)+'" y="51" width="11" height="29" rx="5.5" style="'+arm+'"/>';
-    g+='<rect x="'+(x+6)+'" y="80" width="10" height="26" rx="5" style="'+st('forearm')+'"/>';
-    g+='<rect x="'+(x+64)+'" y="80" width="10" height="26" rx="5" style="'+st('forearm')+'"/>';
     if(!back){
       g+='<rect x="'+(x+24)+'" y="42" width="15" height="16" rx="5" style="'+st('chest')+'"/>';
       g+='<rect x="'+(x+41)+'" y="42" width="15" height="16" rx="5" style="'+st('chest')+'"/>';
@@ -994,14 +1004,15 @@ function bodyMap(name){
     g+='<rect x="'+(x+41)+'" y="107" width="13" height="40" rx="6" style="'+th+'"/>';
     g+='<rect x="'+(x+28)+'" y="148" width="11" height="33" rx="5" style="'+st('calf')+'"/>';
     g+='<rect x="'+(x+41)+'" y="148" width="11" height="33" rx="5" style="'+st('calf')+'"/>';
-    g+='<text x="'+(x+40)+'" y="195" style="fill:var(--muted)" font-size="10" text-anchor="middle">'+(back?'뒤':'앞')+'</text>';
+    g+='<text x="'+(x+40)+'" y="196" style="fill:var(--muted)" font-size="10" text-anchor="middle">'+(back?'뒤':'앞')+'</text>';
+    g+='</g>';
     return g;
   }
   var tags=[];
-  m[0].forEach(function(k){ if(MNAME[k]) tags.push('<span class="badge" style="margin:0 6px 0 0">'+MNAME[k]+'</span>'); });
-  m[1].forEach(function(k){ if(MNAME[k]) tags.push('<span class="badge" style="margin:0 6px 0 0;opacity:.6">'+MNAME[k]+'</span>'); });
+  m[0].forEach(function(k){ if(MNAME[k]) tags.push('<span class="badge" style="margin:0 6px 0 0;color:var(--muscle)">'+MNAME[k]+'</span>'); });
+  m[1].forEach(function(k){ if(MNAME[k]) tags.push('<span class="badge" style="margin:0 6px 0 0;color:var(--muscle);opacity:.55">'+MNAME[k]+'</span>'); });
   return '<div class="card" style="padding:12px 10px 8px;text-align:center">'+
-    '<svg viewBox="0 0 200 205" style="width:100%;max-width:290px;height:auto">'+fig(10,false)+fig(110,true)+'</svg>'+
+    '<svg viewBox="0 0 200 228" style="width:100%;max-width:300px;height:auto">'+fig(10,false)+fig(110,true)+'</svg>'+
     '<div style="margin-top:6px;line-height:2">'+tags.join('')+'</div>'+
     '<div class="small muted" style="margin-top:4px">진한 색이 주로 쓰는 부위입니다</div></div>';
 }
