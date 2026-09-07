@@ -1,4 +1,4 @@
-var CACHE = 'undong-v23';
+var CACHE = 'undong-v24';
 var FILES = ['./', './index.html', './manifest.json', './icon-192.png', './icon-512.png'];
 
 self.addEventListener('install', function(e){
