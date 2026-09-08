@@ -454,7 +454,7 @@ function askConfig(){
       location.reload(); return true;
     }, '연결하기', '나중에');
 }
-var APP_VER='v32';
+var APP_VER='v33';
 function renderSync(){
   $('#sync').innerHTML = (fb ? (online? 'Firebase 연결됨 · 자동 저장 중' : '오프라인 · 폰에 저장 중, 연결되면 동기화')
     : '<span style="cursor:pointer;text-decoration:underline">Firebase 미연결 — 연결 설정하기</span>')
@@ -1641,6 +1641,23 @@ POSE['수영']=function(){
   return g;
 };
 
+function shrinkImage(file, cb){
+  try{
+    var url=URL.createObjectURL(file);
+    var im=new Image();
+    im.onload=function(){
+      var MX=1000, w=im.width, hh=im.height;
+      if(w>MX){ hh=Math.round(hh*MX/w); w=MX; }
+      var cv=document.createElement('canvas'); cv.width=w; cv.height=hh;
+      cv.getContext('2d').drawImage(im,0,0,w,hh);
+      URL.revokeObjectURL(url);
+      cv.toBlob(function(b){ cb(b||file); }, 'image/jpeg', 0.85);
+    };
+    im.onerror=function(){ URL.revokeObjectURL(url); cb(file); };
+    im.src=url;
+  }catch(e){ cb(file); }
+}
+
 function poseBox(name){
   var p=POSE[name];
   if(!p) return '';
@@ -1726,7 +1743,8 @@ function tipsFor(name){
 }
 function guide(name){
   var t = tipsFor(name), html='', dc=descFor(name);
-  html += poseBox(name);
+  if(MODE==='mid') html += '<div id="picBox"></div>';
+  html += '<div id="poseWrap">'+poseBox(name)+'</div>';
   html += bodyMap(name);
   if(dc){
     html += '<div class="small" style="margin:-4px 0 10px"><span class="badge" style="margin:0">'+esc(dc[0])+'</span>'+
@@ -1741,12 +1759,16 @@ function guide(name){
     '<button class="btn ghost" id="gSw">시간 재기</button></div>';
   if(MODE==='mid'){
     html += '<div class="row" style="margin-top:10px">'+
+      '<label class="btn ghost" for="pFile" style="display:block;text-align:center">그림 넣기</label>'+
+      '<button class="btn ghost" id="pDel">그림 지우기</button></div>'+
+      '<input type="file" id="pFile" accept="image/*" style="display:none">'+
+      '<div class="row" style="margin-top:8px">'+
       '<label class="btn ghost" for="vFile" style="display:block;text-align:center">영상 넣기</label>'+
       '<button class="btn ghost" id="vDel">영상 지우기</button></div>'+
       '<input type="file" id="vFile" accept="video/*" style="display:none">'+
       '<div class="small muted" style="margin-top:10px;line-height:1.7">'+
-      '직접 찍은 영상을 폰에서 골라 넣으세요. <b>이 폰에만 저장되고 인터넷에는 올라가지 않습니다.</b> '+
-      '폰을 바꾸거나 브라우저 저장 공간을 지우면 사라집니다.</div>';
+      '그림이나 영상을 폰에서 골라 넣으면 위에 나옵니다. 그림을 넣으면 기본 자세 그림 대신 그 그림이 보입니다. '+
+      '<b>이 폰에만 저장되고 인터넷에는 올라가지 않습니다.</b> 폰을 바꾸거나 브라우저 저장 공간을 지우면 사라집니다.</div>';
   }
   var vurl=null;
   var sh = sheet(name, html, function(){}, '닫기', '');
@@ -1754,6 +1776,30 @@ function guide(name){
   sh.querySelector('#gCnt').onclick=function(){ counter(name, {}); };
   sh.querySelector('#gSw').onclick=function(){ stopwatch(name, null); };
   if(MODE==='mid'){
+    var purl=null, pb=sh.querySelector('#picBox');
+    var showPic=function(){
+      vidGet('img:'+name,function(b){
+        if(purl){ URL.revokeObjectURL(purl); purl=null; }
+        var pw=sh.querySelector('#poseWrap');
+        if(!b){ pb.innerHTML=''; if(pw) pw.style.display=''; return; }
+        purl=URL.createObjectURL(b);
+        pb.innerHTML='<div class="card" style="padding:8px"><img src="'+purl+'" style="width:100%;display:block;border-radius:10px"></div>';
+        if(pw) pw.style.display='none';
+      });
+    };
+    showPic();
+    sh.querySelector('#pFile').onchange=function(){
+      var f=this.files&&this.files[0]; if(!f) return;
+      toast('그림 저장 중...');
+      shrinkImage(f,function(b){
+        vidPut('img:'+name,b,function(ok){
+          if(ok){ toast('그림을 넣었습니다'); showPic(); } else toast('저장하지 못했습니다');
+        });
+      });
+    };
+    sh.querySelector('#pDel').onclick=function(){
+      vidDel('img:'+name,function(){ toast('그림을 지웠습니다'); showPic(); });
+    };
     var box=sh.querySelector('#vBox');
     var showVid=function(){
       vidGet(name,function(b){
@@ -1777,7 +1823,11 @@ function guide(name){
       vidDel(name,function(){ toast('영상을 지웠습니다'); showVid(); });
     };
     var oldC=sh.querySelector('#_o').onclick;
-    sh.querySelector('#_o').onclick=function(){ if(vurl) URL.revokeObjectURL(vurl); oldC(); };
+    sh.querySelector('#_o').onclick=function(){
+      if(vurl) URL.revokeObjectURL(vurl);
+      if(purl) URL.revokeObjectURL(purl);
+      oldC();
+    };
   }
 }
 
