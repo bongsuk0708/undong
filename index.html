@@ -454,7 +454,7 @@ function askConfig(){
       location.reload(); return true;
     }, '연결하기', '나중에');
 }
-var APP_VER='v29';
+var APP_VER='v30';
 function renderSync(){
   $('#sync').innerHTML = (fb ? (online? 'Firebase 연결됨 · 자동 저장 중' : '오프라인 · 폰에 저장 중, 연결되면 동기화')
     : '<span style="cursor:pointer;text-decoration:underline">Firebase 미연결 — 연결 설정하기</span>')
@@ -969,18 +969,19 @@ function bodyMap(name){
   m[0].forEach(function(x){ P[x]=1; });
   m[1].forEach(function(x){ if(!P[x]) S[x]=1; });
   var LN=';stroke:var(--line);stroke-width:.7;stroke-linejoin:round';
+  var DIM=';opacity:.4';
   function f(k){
     if(P[k]) return 'fill:url(#gHot)'+LN;
-    if(S[k]) return 'fill:url(#gWarm)'+LN;
-    return 'fill:url(#gBase)'+LN;
+    if(S[k]) return 'fill:url(#gWarm);opacity:.9'+LN;
+    return 'fill:url(#gBase)'+LN+DIM;
   }
   function fc(part){
     if(P.chest||P['chest'+part]) return 'fill:url(#gHot)'+LN;
-    if(S.chest||S['chest'+part]) return 'fill:url(#gWarm)'+LN;
-    return 'fill:url(#gBase)'+LN;
+    if(S.chest||S['chest'+part]) return 'fill:url(#gWarm);opacity:.9'+LN;
+    return 'fill:url(#gBase)'+LN+DIM;
   }
-  var base='fill:url(#gBase)'+LN;
-  var vein='fill:none;stroke:var(--line);stroke-width:.55;opacity:.8';
+  var base='fill:url(#gBase)'+LN+DIM;
+  var vein='fill:none;stroke:var(--line);stroke-width:.55;opacity:.3';
   function P_(d,s){ return '<path d="'+d+'" style="'+s+'"/>'; }
   function L(d){ return '<path d="'+d+'" style="'+vein+'"/>'; }
   function fig(x, back){
@@ -1081,10 +1082,10 @@ function bodyMap(name){
      '<stop offset="1" style="stop-color:var(--line)"/></linearGradient>'+
    '<linearGradient id="gHot" x1="0" y1="0" x2="1" y2="1">'+
      '<stop offset="0" style="stop-color:var(--muscle);stop-opacity:1"/>'+
-     '<stop offset="1" style="stop-color:var(--muscle);stop-opacity:.7"/></linearGradient>'+
+     '<stop offset="1" style="stop-color:var(--muscle);stop-opacity:.82"/></linearGradient>'+
    '<linearGradient id="gWarm" x1="0" y1="0" x2="1" y2="1">'+
-     '<stop offset="0" style="stop-color:var(--muscle);stop-opacity:.5"/>'+
-     '<stop offset="1" style="stop-color:var(--muscle);stop-opacity:.32"/></linearGradient>'+
+     '<stop offset="0" style="stop-color:var(--muscle);stop-opacity:.55"/>'+
+     '<stop offset="1" style="stop-color:var(--muscle);stop-opacity:.4"/></linearGradient>'+
    '</defs>';
   var tags=[];
   m[0].forEach(function(k){ if(MNAME[k]) tags.push('<span class="badge" style="margin:0 6px 0 0;color:var(--muscle)">'+MNAME[k]+'</span>'); });
@@ -1096,9 +1097,9 @@ function bodyMap(name){
 }
 
 var PZ=(function(){
-  var S='#9A9488', M='#C2BCB0', H='#E4E0D6', F='#7C766B';
-  var EQD='#55514A', EQM='#6E6A62', EQL='#8E8A80', EQS='#57544E';
-  var RD='#DD5142', RD2='#C7412F', RDL='#8E2C22', GY='#B7B0A3', GYL='#8B8478';
+  var S='#B5AFA3', M='#D5D0C6', H='#F0ECE3', F='#A29B8F';
+  var EQD='#726E66', EQM='#8B857C', EQL='#A6A198', EQS='#7A766E';
+  var RD='#E23B29', RD2='#C42E1C', RDL='#7A2114', GY='#CFC9BE', GYL='#A9A296';
   function ln(x1,y1,x2,y2,w,c){ return '<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="'+c+'" stroke-width="'+w+'" stroke-linecap="round"/>'; }
   function lm(x1,y1,x2,y2,w){
     return ln(x1,y1,x2,y2,w,S)+ln(x1-2,y1-4,x2-2,y2-4,Math.max(8,w-10),M)+ln(x1-3,y1-8,x2-3,y2-8,Math.max(5,w-26),H);
